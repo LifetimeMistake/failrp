@@ -138,7 +138,7 @@ class Partition:
     def from_object(device):
         path = device["path"]
         size = device["size"]
-        removable = device["removable"]
+        removable = device["rm"]
         partuuid = device["partuuid"]
         fsuuid = device["uuid"]
         fstype = device["fstype"]

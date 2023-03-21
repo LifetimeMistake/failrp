@@ -3,7 +3,7 @@ clear
 echo "dzien dobry"
 echo "witam w najlepszym programie do odtwarzania komputerow"
 cd /app
-
+ 
 echo "Bootstrapping..."
 modprobe nfs
 python3 bootstrap.py
