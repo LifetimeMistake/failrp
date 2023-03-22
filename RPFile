@@ -1,0 +1,3 @@
+DEPLOY "img.img" TO "windows"
+UNZIP "DSM6_4.zip" TO "/vmki/obrazy/dsm"
+COPY "testfile100mb.img" TO "/vmki/obrazy/obraz2.img"
