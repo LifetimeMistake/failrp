@@ -6,7 +6,7 @@ wget "https://bootstrap.pypa.io/get-pip.py"
 python3 get-pip.py --break-system-packages
 rm get-pip.py
 
-apt update && apt install vitetris nsnake beep
+apt update && apt install -y vitetris nsnake beep git
 pip install -r bootstrap-requirements.txt --break-system-packages
 pip install -r requirements.txt --break-system-packages
 
