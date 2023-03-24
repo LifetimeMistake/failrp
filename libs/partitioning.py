@@ -1,9 +1,10 @@
-from sh import e2label, lsblk
+from sh import e2label, lsblk, mount, umount
 import re
 import json
 
 lsblk_unk_column = re.compile(r"lsblk: unknown column: (?P<column>.*)")
 lsblk_unk_device = re.compile(r"lsblk: (?P<device>.*): not a block device")
+COLUMNS=["size", "rm", "partuuid", "uuid", "fstype", "partlabel", "label", "mountpoint"]
 
 
 class LsblkHelper:
@@ -48,7 +49,7 @@ class Disk:
 
     def from_device(path):
         disk = None
-        devices = LsblkHelper.call(["size", "partuuid", "uuid", "fstype", "partlabel", "label", "rm"], path)
+        devices = LsblkHelper.call(COLUMNS, path)
         parts = []
 
         # Find disk
@@ -90,7 +91,7 @@ class Disk:
     
     def get_all():
         disks = {}
-        devices = LsblkHelper.call(["size", "partuuid", "uuid", "fstype", "partlabel", "label", "rm"])
+        devices = LsblkHelper.call(COLUMNS)
         for disk in devices:
             if disk["type"] != "disk":
                 continue
@@ -112,7 +113,7 @@ class Disk:
         
 
 class Partition:
-    def __init__(self, path, size, removable, partuuid, fsuuid, fstype, partlabel, fslabel):
+    def __init__(self, path, size, removable, partuuid, fsuuid, fstype, partlabel, fslabel, mountpoint):
         self.path = path
         self.size = size
         self.removable = removable
@@ -121,9 +122,10 @@ class Partition:
         self.fstype = fstype
         self.partlabel = partlabel
         self.fslabel = fslabel
+        self.mountpoint = mountpoint
 
     def from_device(path):
-        devices = LsblkHelper.call(["size", "rm", "partuuid", "uuid", "fstype", "partlabel", "label"], path)
+        devices = LsblkHelper.call(COLUMNS, path)
         for device in devices:
             if device["path"] != path:
                 continue
@@ -144,11 +146,12 @@ class Partition:
         fstype = device["fstype"]
         partlabel = device["partlabel"]
         fslabel = device["label"]
-        return Partition(path, size, removable, partuuid, fsuuid, fstype, partlabel, fslabel)
+        mountpoint = device["mountpoint"]
+        return Partition(path, size, removable, partuuid, fsuuid, fstype, partlabel, fslabel, mountpoint)
 
     def get_all():
         partitions = {}
-        devices = LsblkHelper.call(["size", "rm", "partuuid", "uuid", "fstype", "partlabel", "label"])
+        devices = LsblkHelper.call(COLUMNS)
         for device in devices:
             if device["type"] != "part":
                 continue
@@ -162,3 +165,18 @@ class Partition:
             label = ""
 
         e2label(self.path, label)
+
+    def mount(self, mountpoint):
+        mount(self.path, mountpoint)
+        self.mountpoint = mountpoint
+
+    def umount(self, force=False):
+        if not self.mountpoint and not force:
+            return
+
+        if force:
+            umount("--force", self.path)
+        else:
+            umount(self.path)
+
+        self.mountpoint = None
