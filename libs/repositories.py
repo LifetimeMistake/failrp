@@ -2,6 +2,7 @@ import os
 import os.path as path
 import hashlib
 import shutil
+from .rpfile import RPFile
 
 HASH_SIG = ".sha256"
 
@@ -72,6 +73,16 @@ class Image:
         return self.local_path != None
 
     @property
+    def best_path(self):
+        if self.available_local:
+            return self.local_path
+        
+        if self.available_remote:
+            return self.remote_path
+
+        return None
+
+    @property
     def outdated(self):
         return self.available_remote and self.available_local and self.remote_hash != self.local_hash
 
@@ -95,7 +106,6 @@ class ImageRepository:
 
         self.repo_path: str = repo_path
         self.storage_path: str = storage_path
-        self.eager_mode: bool = eager_mode
         self.images: dict[str, Image] = {}
 
         if eager_mode:
@@ -107,28 +117,31 @@ class ImageRepository:
 
         # Build image list
         for name in image_files:
-            local_path = path.join(self.storage_path, name)
-            remote_path = path.join(self.repo_path, name)
+            try:
+                local_path = path.join(self.storage_path, name)
+                remote_path = path.join(self.repo_path, name)
 
-            local_exists = path.isfile(local_path)
-            remote_exists = path.isfile(remote_path)
+                local_exists = path.isfile(local_path)
+                remote_exists = path.isfile(remote_path)
 
-            local_hash = read_image_hash(local_path) if local_exists else None
-            remote_hash = read_image_hash(remote_path) if remote_exists else None
+                local_hash = read_image_hash(local_path) if local_exists else None
+                remote_hash = read_image_hash(remote_path) if remote_exists else None
 
-            if local_exists and not local_hash:
-                local_hash = compute_hash(local_path)
-                write_image_hash(local_path, local_hash)
+                if local_exists and not local_hash:
+                    local_hash = compute_hash(local_path)
+                    write_image_hash(local_path, local_hash)
 
-            image = Image(
-                name,
-                remote_path if remote_exists else None,
-                local_path if local_exists else None,
-                remote_hash,
-                local_hash
-            )
+                image = Image(
+                    name,
+                    remote_path if remote_exists else None,
+                    local_path if local_exists else None,
+                    remote_hash,
+                    local_hash
+                )
 
-            images[name] = image
+                images[name] = image
+            except Exception as ex:
+                print(f"WARNING: Failed to sync image {name}: {ex}")
 
         self.images = images
 
@@ -186,6 +199,15 @@ class ImageRepository:
     def get(self, name):
         return self.images[name]
 
+    def get_all(self):
+        return list(self.images.values())
+
+    def get_remotes(self):
+        return [image for image in self.images.values() if image.available_remote]
+
+    def get_locals(self):
+        return [image for image in self.images.values() if image.available_local]
+
     def __getitem__(self, name):
         return self.get(name)
 
@@ -206,3 +228,41 @@ class ImageRepository:
     @property
     def total_storage(self):
         return shutil.disk_usage(self.storage_path).total
+
+class ConfigRepository:
+    def __init__(self, repo_path, eager_mode=False):
+        if not path.exists(repo_path):
+            raise ValueError(f"Non-existent repository path provided: {repo_path}")
+            
+        self.repo_path = repo_path
+        self.configs: dict[str, RPFile] = {}
+
+        if eager_mode:
+            self.sync()
+
+    def sync(self):
+        configs: dict[str, RPFile] = {}
+        for name in os.listdir(self.repo_path):
+            try:
+                config_path = path.join(self.repo_path, name)
+                with open(config_path, "r") as f:
+                    source = f.read()
+
+                config = RPFile(source)
+                configs[name] = config
+            except Exception as ex:
+                print(f"WARNING: Failed to sync config {name}: {ex}")
+
+        self.configs = configs
+
+    def get(self, name):
+        return self.configs[name]
+
+    def __getitem__(self, name):
+        return self.get(name)
+
+    def __len__(self):
+        return len(self.configs)
+
+    def __contains__(self, name):
+        return name in self.configs
