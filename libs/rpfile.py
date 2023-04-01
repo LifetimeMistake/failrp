@@ -1,20 +1,22 @@
-from rpfile_parse import RPFileParser
+"""Utility Classes for RPfile Parsing"""
 import io
+from rpfile_parse import RPFileParser
 
-def parse_arguments(s):
+def parse_arguments(_s):
+    """Parses String Arguments into a list"""
     # Split the input string into tokens
     tokens = []
     current_token = ''
     in_quote = False
-    for c in s:
-        if c == ' ' and not in_quote:
+    for _c in _s:
+        if _c == ' ' and not in_quote:
             if current_token:
                 tokens.append(current_token)
                 current_token = ''
-        elif c == '"':
+        elif _c == '"':
             in_quote = not in_quote
         else:
-            current_token += c
+            current_token += _c
     if current_token:
         tokens.append(current_token)
     # Remove quotes from the tokens
@@ -28,38 +30,42 @@ def parse_arguments(s):
         args.pop(args.index("TO"))
     return args
 
-def compile_instruction(type, params):
-    if type == "DEPLOY":
+def compile_instruction(instrucion_type, params):
+    """Chooses Class for given instruction"""
+    if instrucion_type == "DEPLOY":
         return DeployInstruction(params)
-    elif type == "COPY":
+    elif instrucion_type == "COPY":
         return CopyInstruction(params)
-    elif type == "UNPACK":
+    elif instrucion_type == "UNPACK":
         return UnpackInstruction(params)
-    elif type == "PULL":
+    elif instrucion_type == "PULL":
         return PullInstruction(params)
-    elif type ==  "FORMAT":
+    elif instrucion_type ==  "FORMAT":
         return FormatInstruction(params)
     else:
         # Unknown instruction
-        return Instruction(type, params)
+        return Instruction(instrucion_type, params)
 
 class Instruction:
-    def __init__(self, type, params):
-        self.type = type
+    """Instruction Headclass"""
+    def __init__(self, instruction_type, params):
+        self.type = instruction_type
         self.params = params
 
     def __str__(self):
-        return "{type} {params}".format(type=self.type, params=" ".join([f"\"{x}\"" for x in self.params]))
+        return f'{self.type} {" ".join([F"`{x}`" for x in self.params])}'
 
 
 class DeployInstruction(Instruction):
+    """A instruction wrapper for Deploying a image"""
     def __init__(self, params):
         if len(params) != 2:
-            raise ValueError(f"Invalid deploy instruction signature: {len(params)} params, expected 2")
+            raise ValueError(f"Invalid deploy instruction signature: \
+                             {len(params)} params, expected 2")
 
         source = params[0].strip().split(":")
         if len(source) > 2:
-            raise ValueError(f"Invalid source definition, too many parameters")
+            raise ValueError("Invalid source definition, too many parameters")
 
         source_image = source[0].strip()
         source_volume = source[1].strip() if len(source) == 2 else None
@@ -80,12 +86,17 @@ class DeployInstruction(Instruction):
         self.volume = target_volume
 
     def __str__(self):
-        return f"DEPLOY {self.image}{(f':{self.image_volume}' if self.image_volume != None else '')} {self.volume}"
+        return f"DEPLOY \
+            {self.image}{(f':{self.image_volume}' if self.image_volume else '')} \
+            {self.volume}"
 
 class CopyInstruction(Instruction):
+    """Instruction Wrapper for copying files"""
     def __init__(self, params):
         if len(params) != 2:
-            raise ValueError(f"Invalid copy instruction signature: {len(params)} params, expected 2")
+            raise ValueError(f"Invalid copy instruction signature: \
+                            {len(params)} \
+                            params, expected 2")
 
         source_image = params[0].strip()
         target = params[1].split(":")
@@ -116,9 +127,12 @@ class CopyInstruction(Instruction):
         return f"COPY {self.image} {self.volume}:{self.path}"
 
 class UnpackInstruction(Instruction):
+    """Instruction class for unzipping files"""
     def __init__(self, params):
         if len(params) != 2:
-            raise ValueError(f"Invalid unpack instruction signature: {len(params)} params, expected 2")
+            raise ValueError(f"Invalid unpack instruction signature: \
+                            {len(params)} \
+                            params, expected 2")
 
         source_image = params[0].strip()
         target = params[1].split(":")
@@ -149,9 +163,12 @@ class UnpackInstruction(Instruction):
         return f"UNPACK {self.image} {self.volume}:{self.path}"
 
 class PullInstruction(Instruction):
+    """Instruction wrapper for pulling a repository"""
     def __init__(self, params):
         if len(params) != 1:
-            raise ValueError(f"Invalid pull instruction signature: {len(params)} params, expected 1")
+            raise ValueError(f"Invalid pull instruction signature: \
+                            {len(params)} \
+                            params, expected 1")
 
         image = params[0].strip()
         if image == "":
@@ -164,9 +181,12 @@ class PullInstruction(Instruction):
         return f"PULL {self.image}"
 
 class FormatInstruction(Instruction):
+    """Instruction Wrapper for formatting a partition"""
     def __init__(self, params):
         if len(params) != 2:
-            raise ValueError(f"Invalid format instruction signature: {len(params)} params, expected 2")
+            raise ValueError(f"Invalid format instruction signature: \
+                            {len(params)} \
+                            params, expected 2")
 
         target_volume = params[0].strip()
         new_filesystem = params[1].strip()
@@ -185,32 +205,37 @@ class FormatInstruction(Instruction):
         return f"FORMAT {self.volume} {self.fstype}"
 
 class RPFile:
+    """RPFile type extension"""
     def __init__(self, source=None):
-        self.instructions: list[Instruction] | None = None
+        self.instructions: "list[Instruction] | None" = None
         if source:
             self.compile(source)
 
     def compile(self, source):
+        """Compiles RPFile to Python"""
         source_bytes = source.encode("utf-8")
         instructions = []
-        with io.BytesIO(source_bytes) as f:
-            parser = RPFileParser(fileobj=f)
+        with io.BytesIO(source_bytes) as _f:
+            parser = RPFileParser(fileobj=_f)
             self.instructions = []
             for step in parser.structure:
-                type = step["instruction"].upper()
+                instrucion_type = step["instruction"].upper()
                 params = parse_arguments(step["value"])
-                instructions.append(compile_instruction(type, params))
+                instructions.append(compile_instruction(instrucion_type, params))
 
         self.instructions = instructions
 
     def add_instruction(self, instruction):
+        """appends instruction to instruction stack"""
         self.instructions.append(instruction)
 
     def remove_instruction(self, instruction):
+        """removes instruction from instruction stack"""
         self.instructions.remove(instruction)
 
     @property
     def required_images(self):
+        """Lists all required files for RPfile"""
         images = []
         for instruction in self.instructions:
             if hasattr(instruction, "image"):
@@ -220,8 +245,9 @@ class RPFile:
 
     @property
     def required_volumes(self):
+        """Lists all required Volumes for RPfile"""
         volumes = []
-        for instruction in self.instruction:
+        for instruction in self.instructions:
             if hasattr(instruction, "volume"):
                 volumes.append(instruction.volume)
 

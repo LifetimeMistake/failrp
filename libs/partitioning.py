@@ -1,8 +1,10 @@
+"""Utility Classes for partitioning on linux"""
 from __future__ import annotations
 import os.path as path
-from sh import e2label, lsblk, mount, umount, mkdir
-import re
+import typing
 import json
+import re
+from sh import e2label, lsblk, mount, umount, mkdir
 
 lsblk_unk_column = re.compile(r"lsblk: unknown column: (?P<column>.*)")
 lsblk_unk_device = re.compile(r"lsblk: (?P<device>.*): not a block device")
@@ -10,7 +12,14 @@ COLUMNS = ["size", "rm", "partuuid", "uuid", "fstype", "partlabel", "label", "mo
 
 
 class LsblkHelper:
-    def call(columns=["size", "partuuid", "uuid", "fstype", "partlabel", "label"], device=None):
+    """lsblk Helper class"""
+    @staticmethod
+    def call(columns: "typing.Optional[list[str]]"=None, device=None):
+        """calls lsblk with given arguments"""
+
+        if not columns:
+            columns = ["size", "partuuid", "uuid",
+                       "fstype", "partlabel", "label"]
         if "path" not in columns:
             columns.append("path")
 
@@ -18,9 +27,9 @@ class LsblkHelper:
             columns.append("type")
 
         args = ["-o", f"{','.join(columns)}", "-J", "-b", "-p", "-n"]
-        if device != None:
+        if device is not None:
             args.append(device)
-
+        output = ""
         try:
             output = lsblk(args)
         except Exception as ex:
@@ -28,45 +37,48 @@ class LsblkHelper:
             match = lsblk_unk_column.match(output)
             if match:
                 print(output)
-                raise ValueError(f"Unknown column: {match['column']}")
+                raise ValueError(f"Unknown column: {match['column']}") from ex
 
             match = lsblk_unk_device.match(output)
             if match:
-                raise ValueError(f"Unknown device: {match['device']}")
+                raise ValueError(f"Unknown device: {match['device']}") from ex
 
             raise ex
 
         output = json.loads(output)
         if "blockdevices" not in output:
-            raise Exception("Unknown lsblk error")
+            raise SystemError("Unknown lsblk error")
 
         return output["blockdevices"]
 
 
 class Disk:
-    def __init__(self, path, size, removable, partitions):
-        self.path: str = path
+    """Disk management utility class"""
+    def __init__(self, _path, size, removable, partitions):
+        self.path: str = _path
         self.size: int = size
         self.removable: bool = removable
         self.partitions: list[Partition] = partitions
 
-    def from_device(path) -> Disk:
+    @staticmethod
+    def from_device(_path) -> Disk:
+        """creates disk object from drive path"""
         disk = None
-        devices = LsblkHelper.call(COLUMNS, path)
+        devices = LsblkHelper.call(COLUMNS, _path)
         parts = []
 
         # Find disk
         for device in devices:
-            if device["path"] != path:
+            if device["path"] != _path:
                 continue
 
             if device["type"] != "disk":
-                raise ValueError(f"Not a disk: {path}")
+                raise ValueError(f"Not a disk: {_path}")
 
             disk = device
 
         if disk is None:
-            raise Exception("Could not find device info")
+            raise FileNotFoundError("Could not find device info")
 
         # Find children
         for device in devices:
@@ -81,8 +93,10 @@ class Disk:
         disk["children"] = parts
         return Disk.from_object(devices)
 
-    def from_object(device) -> Disk:
-        path = device["path"]
+    @staticmethod
+    def from_object(device: dict[str, str]) -> Disk:
+        """creates disk from dictionary"""
+        _path = device["path"]
         size = device["size"]
         removable = device["rm"]
         parts = []
@@ -90,9 +104,11 @@ class Disk:
         for part in device["children"]:
             parts.append(Partition.from_object(part))
 
-        return Disk(path, size, removable, parts)
+        return Disk(_path, size, removable, parts)
 
+    @staticmethod
     def get_all() -> dict[str, Disk]:
+        """returns all Drives"""
         disks = {}
         devices = LsblkHelper.call(COLUMNS)
         for disk in devices:
@@ -115,8 +131,10 @@ class Disk:
         return disks
 
 class Partition:
-    def __init__(self, path, size, removable, partuuid, fsuuid, fstype, partlabel, fslabel, mountpoint):
-        self.path: str = path
+    """Partition utility class"""
+    def __init__(self, _path, size, removable,
+                  partuuid, fsuuid, fstype, partlabel, fslabel, mountpoint):
+        self.path: str = _path
         self.size: int = size
         self.removable: bool = removable
         self.partuuid: str = partuuid
@@ -125,22 +143,25 @@ class Partition:
         self.partlabel: str = partlabel
         self.fslabel: str = fslabel
         self.mountpoint: str = mountpoint
-
-    def from_device(path) -> Partition:
-        devices = LsblkHelper.call(COLUMNS, path)
+    @classmethod
+    def from_device(cls, _path: str) -> Partition:
+        """create partition from systems partition path"""
+        devices = LsblkHelper.call(COLUMNS, _path)
         for device in devices:
-            if device["path"] != path:
+            if device["path"] != _path:
                 continue
 
             if device["type"] != "part":
-                raise ValueError(f"Not a partition: {path}")
+                raise ValueError(f"Not a partition: {_path}")
 
-            return Partition.from_object(device)
+            return cls.from_object(device)
 
-        raise Exception("Could not find device info")
+        raise FileNotFoundError("Could not find device info")
 
-    def from_object(device) -> Partition:
-        path = device["path"]
+    @classmethod
+    def from_object(cls, device: "dict[str, str]") -> Partition:
+        """creates partition from dictionary"""
+        _path = device["path"]
         size = device["size"]
         removable = device["rm"]
         partuuid = device["partuuid"]
@@ -149,9 +170,12 @@ class Partition:
         partlabel = device["partlabel"]
         fslabel = device["label"]
         mountpoint = device["mountpoint"]
-        return Partition(path, size, removable, partuuid, fsuuid, fstype, partlabel, fslabel, mountpoint)
+        return cls(_path, size, removable, partuuid, fsuuid, fstype,
+                         partlabel, fslabel, mountpoint)
 
+    @staticmethod
     def get_all() -> dict[str, Partition]:
+        """returns all available partitions"""
         partitions = {}
         devices = LsblkHelper.call(COLUMNS)
         for device in devices:
@@ -162,13 +186,15 @@ class Partition:
 
         return partitions
 
-    def set_fslabel(self, label):
+    def set_fslabel(self, label: str):
+        """sets label on partition"""
         if label is None:
             label = ""
 
         e2label(self.path, label)
 
-    def mount(self, mountpoint, create_mountpoint=True):
+    def mount(self, mountpoint: str, create_mountpoint=True):
+        """mount partition to system"""
         if not path.isdir(mountpoint):
             if create_mountpoint:
                 mkdir("-p", mountpoint)
@@ -179,6 +205,7 @@ class Partition:
         self.mountpoint = mountpoint
 
     def umount(self, force=False):
+        """unmounts partition from system"""
         if not self.mountpoint and not force:
             return
 
