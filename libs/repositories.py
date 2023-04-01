@@ -196,8 +196,8 @@ class ImageRepository:
         destination = path.join(self.storage_path, name)
         image.pull(destination)
 
-    def get(self, name):
-        return self.images[name]
+    def get(self, name, default=None):
+        return self.images.get(name, default)
 
     def get_all(self):
         return list(self.images.values())
@@ -209,7 +209,7 @@ class ImageRepository:
         return [image for image in self.images.values() if image.available_local]
 
     def __getitem__(self, name):
-        return self.get(name)
+        return self.images[name]
 
     def __len__(self):
         return len(self.images)
@@ -255,11 +255,11 @@ class ConfigRepository:
 
         self.configs = configs
 
-    def get(self, name):
-        return self.configs[name]
+    def get(self, name, default=None):
+        return self.configs.get(name, default)
 
     def __getitem__(self, name):
-        return self.get(name)
+        return self.configs[name]
 
     def __len__(self):
         return len(self.configs)

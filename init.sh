@@ -10,12 +10,14 @@ python3 bootstrap.py
 exitCode=$?
 if [ "$exitCode" != "0" ]; then
 	echo "FailRP bootstrap failed: init error ${exitCode}"
-	# echo "Halting in 10 seconds"
-	# shutdown 10
-	# sleep 10
-	# exit
+	echo "Halting in 120 seconds..."
+	shutdown 2
+	echo "Dropping into emergency shell"
+	bash
+	exit
 fi
 
-bash
+python3 app.py
 echo "FailRP finished"
+shutdown 0
 exit

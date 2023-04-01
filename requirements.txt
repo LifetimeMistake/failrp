@@ -1,3 +1,4 @@
 git+https://github.com/PiRifle/RPfile-parse.git@first_steps
 sh
 rich
+pyyaml

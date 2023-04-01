@@ -29,21 +29,19 @@ def parse_arguments(s):
     return args
 
 def compile_instruction(type, params):
-    match type:
-        case "DEPLOY":
-            return DeployInstruction(params)
-        case "COPY":
-            return CopyInstruction(params)
-        case "UNPACK":
-            return UnpackInstruction(params)
-        case "PULL":
-            return PullInstruction(params)
-        case "FORMAT":
-            return FormatInstruction(params)
-        case _:
-            # Unknown instruction
-            return Instruction(type, params)
-
+    if type == "DEPLOY":
+        return DeployInstruction(params)
+    elif type == "COPY":
+        return CopyInstruction(params)
+    elif type == "UNPACK":
+        return UnpackInstruction(params)
+    elif type == "PULL":
+        return PullInstruction(params)
+    elif type ==  "FORMAT":
+        return FormatInstruction(params)
+    else:
+        # Unknown instruction
+        return Instruction(type, params)
 
 class Instruction:
     def __init__(self, type, params):
@@ -59,19 +57,30 @@ class DeployInstruction(Instruction):
         if len(params) != 2:
             raise ValueError(f"Invalid deploy instruction signature: {len(params)} params, expected 2")
 
-        source_image = params[0].strip()
+        source = params[0].strip().split(":")
+        if len(source) > 2:
+            raise ValueError(f"Invalid source definition, too many parameters")
+
+        source_image = source[0].strip()
+        source_volume = source[1].strip() if len(source) == 2 else None
         target_volume = params[1].strip()
 
         if source_image == "":
             raise ValueError("Invalid source image definition")
+
+        if source_volume == "":
+            raise ValueError("Invalid source volume definition")
 
         if target_volume == "":
             raise ValueError("Invalid target volume definition")
 
         super(DeployInstruction, self).__init__("DEPLOY", params)
         self.image = source_image
+        self.image_volume = source_volume
         self.volume = target_volume
 
+    def __str__(self):
+        return f"DEPLOY {self.image}{(f':{self.image_volume}' if self.image_volume != None else '')} {self.volume}"
 
 class CopyInstruction(Instruction):
     def __init__(self, params):
@@ -103,6 +112,8 @@ class CopyInstruction(Instruction):
         self.volume = target_volume
         self.path = target_path
 
+    def __str__(self):
+        return f"COPY {self.image} {self.volume}:{self.path}"
 
 class UnpackInstruction(Instruction):
     def __init__(self, params):
@@ -134,6 +145,9 @@ class UnpackInstruction(Instruction):
         self.volume = target_volume
         self.path = target_path
 
+    def __str__(self):
+        return f"UNPACK {self.image} {self.volume}:{self.path}"
+
 class PullInstruction(Instruction):
     def __init__(self, params):
         if len(params) != 1:
@@ -145,6 +159,9 @@ class PullInstruction(Instruction):
 
         super(PullInstruction, self).__init__("PULL", params)
         self.image = image
+
+    def __str__(self):
+        return f"PULL {self.image}"
 
 class FormatInstruction(Instruction):
     def __init__(self, params):
@@ -163,6 +180,9 @@ class FormatInstruction(Instruction):
         super(FormatInstruction, self).__init__("FORMAT", params)
         self.volume = target_volume
         self.fstype = new_filesystem
+
+    def __str__(self):
+        return f"FORMAT {self.volume} {self.fstype}"
 
 class RPFile:
     def __init__(self, source=None):

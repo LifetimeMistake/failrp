@@ -1,10 +1,12 @@
-from sh import e2label, lsblk, mount, umount
+from __future__ import annotations
+import os.path as path
+from sh import e2label, lsblk, mount, umount, mkdir
 import re
 import json
 
 lsblk_unk_column = re.compile(r"lsblk: unknown column: (?P<column>.*)")
 lsblk_unk_device = re.compile(r"lsblk: (?P<device>.*): not a block device")
-COLUMNS=["size", "rm", "partuuid", "uuid", "fstype", "partlabel", "label", "mountpoint"]
+COLUMNS = ["size", "rm", "partuuid", "uuid", "fstype", "partlabel", "label", "mountpoint"]
 
 
 class LsblkHelper:
@@ -31,7 +33,7 @@ class LsblkHelper:
             match = lsblk_unk_device.match(output)
             if match:
                 raise ValueError(f"Unknown device: {match['device']}")
-            
+
             raise ex
 
         output = json.loads(output)
@@ -40,14 +42,15 @@ class LsblkHelper:
 
         return output["blockdevices"]
 
+
 class Disk:
     def __init__(self, path, size, removable, partitions):
-        self.path = path
-        self.size = size
-        self.removable = removable
-        self.partitions = partitions
+        self.path: str = path
+        self.size: int = size
+        self.removable: bool = removable
+        self.partitions: list[Partition] = partitions
 
-    def from_device(path):
+    def from_device(path) -> Disk:
         disk = None
         devices = LsblkHelper.call(COLUMNS, path)
         parts = []
@@ -77,8 +80,8 @@ class Disk:
 
         disk["children"] = parts
         return Disk.from_object(devices)
-    
-    def from_object(device):
+
+    def from_object(device) -> Disk:
         path = device["path"]
         size = device["size"]
         removable = device["rm"]
@@ -88,8 +91,8 @@ class Disk:
             parts.append(Partition.from_object(part))
 
         return Disk(path, size, removable, parts)
-    
-    def get_all():
+
+    def get_all() -> dict[str, Disk]:
         disks = {}
         devices = LsblkHelper.call(COLUMNS)
         for disk in devices:
@@ -110,21 +113,20 @@ class Disk:
             disks[disk["path"]] = Disk.from_object(disk)
 
         return disks
-        
 
 class Partition:
     def __init__(self, path, size, removable, partuuid, fsuuid, fstype, partlabel, fslabel, mountpoint):
-        self.path = path
-        self.size = size
-        self.removable = removable
-        self.partuuid = partuuid
-        self.fsuuid = fsuuid
-        self.fstype = fstype
-        self.partlabel = partlabel
-        self.fslabel = fslabel
-        self.mountpoint = mountpoint
+        self.path: str = path
+        self.size: int = size
+        self.removable: bool = removable
+        self.partuuid: str = partuuid
+        self.fsuuid: str = fsuuid
+        self.fstype: str = fstype
+        self.partlabel: str = partlabel
+        self.fslabel: str = fslabel
+        self.mountpoint: str = mountpoint
 
-    def from_device(path):
+    def from_device(path) -> Partition:
         devices = LsblkHelper.call(COLUMNS, path)
         for device in devices:
             if device["path"] != path:
@@ -137,7 +139,7 @@ class Partition:
 
         raise Exception("Could not find device info")
 
-    def from_object(device):
+    def from_object(device) -> Partition:
         path = device["path"]
         size = device["size"]
         removable = device["rm"]
@@ -149,7 +151,7 @@ class Partition:
         mountpoint = device["mountpoint"]
         return Partition(path, size, removable, partuuid, fsuuid, fstype, partlabel, fslabel, mountpoint)
 
-    def get_all():
+    def get_all() -> dict[str, Partition]:
         partitions = {}
         devices = LsblkHelper.call(COLUMNS)
         for device in devices:
@@ -159,14 +161,20 @@ class Partition:
             partitions[device["path"]] = Partition.from_object(device)
 
         return partitions
-    
+
     def set_fslabel(self, label):
         if label is None:
             label = ""
 
         e2label(self.path, label)
 
-    def mount(self, mountpoint):
+    def mount(self, mountpoint, create_mountpoint=True):
+        if not path.isdir(mountpoint):
+            if create_mountpoint:
+                mkdir("-p", mountpoint)
+            else:
+                raise FileNotFoundError("Mountpoint does not exist.")
+
         mount(self.path, mountpoint)
         self.mountpoint = mountpoint
 

@@ -5,9 +5,11 @@ import time
 
 cmdline = KernelCmdlineParser()
 
-REMOTE_MOUNTPOINT="/mnt/repo"
-CACHE_MOUNTPOINT="/mnt/cache"
-CACHE_LABEL="FAILRP_CACHE"
+REMOTE_MOUNTPOINT=cmdline.get("remote_mountpoint") or "/mnt/repo"
+CONFIGS_MOUNTPOINT=cmdline.get("configs_mountpoint") or "/mnt/configs"
+CACHE_MOUNTPOINT=cmdline.get("cache_mountpoint") or "/mnt/cache"
+CACHE_LABEL=cmdline.get("cache_label") or "FAILRP_CACHE"
+ERROR_TIMEOUT=30
     
 def check_params(params):
     for param in params:
@@ -23,7 +25,7 @@ def setup_remote_repo():
 
     host = cmdline.get("host")
     repo_path = cmdline.get("repo")
-    print(f"Connecting to repo {repo_path} at {host}...")
+    print(f"Connecting to image repo {repo_path} at {host}...")
 
     try:
         #mount -o nolock,hard,timeo=10 -t nfs host:repo_path 
@@ -35,11 +37,29 @@ def setup_remote_repo():
 
     return True
 
+def setup_configs_repo():
+    if not check_params(["host", "configs"]):
+        return False
+
+    host = cmdline.get("host")
+    repo_path = cmdline.get("configs")
+    print(f"Connecting to config repo {repo_path} at {host}...")
+
+    try:
+        #mount -o nolock,hard,timeo=10 -t nfs host:repo_path 
+        mkdir("-p", CONFIGS_MOUNTPOINT)
+        mount("-o", "nolock,hard,timeo=10", "-t", "nfs", f"{host}:{repo_path}", CONFIGS_MOUNTPOINT)
+    except Exception as ex:
+        print(f"Mount error: {ex}")
+        return False
+
+    return True
+
 def setup_local_repo():
     print("Enumerating partitions...")
     local_cache_part = None
-    for part in Partition.get_all():
-        print(f"{part.path} {part.fstype} {part.uuid} {part.fslabel}")
+    for part in Partition.get_all().values():
+        print(f"{part.path} {part.fstype} {part.fsuuid} {part.fslabel}")
         if not part.removable and part.fslabel == CACHE_LABEL:
             local_cache_part = part
             break
@@ -49,8 +69,7 @@ def setup_local_repo():
         return False
     
     try:
-        mkdir("-p", CACHE_MOUNTPOINT)
-        mount(part.path, CACHE_MOUNTPOINT)
+        local_cache_part.mount(CACHE_MOUNTPOINT, True)
     except Exception as ex:
         print(f"Mount error: {ex}")
         return False
@@ -58,10 +77,10 @@ def setup_local_repo():
     return True
 
 def main():
-    if not setup_remote_repo() or not setup_local_repo():
+    if not setup_remote_repo() or not setup_configs_repo() or not setup_local_repo():
         print("Bootstrap failed")
-        for i in range(10):
-            print(f"Exiting in {10-i}...")
+        for i in range(ERROR_TIMEOUT):
+            print(f"Exiting in {ERROR_TIMEOUT-i}...")
             beep()
             time.sleep(1)
 
