@@ -264,29 +264,33 @@ class ImageRepository:
     def total_storage(self):
         """returns size of cache partition"""
         return shutil.disk_usage(self.storage_path).total
-
+import requests
 class ConfigRepository:
     """RPfile configuration repository"""
-    def __init__(self, repo_path, eager_mode=False):
-        if not path.exists(repo_path):
-            raise ValueError(f"Non-existent repository path provided: {repo_path}")
+    # def __init__(self, repo_path, eager_mode=False):
+    #     if not path.exists(repo_path):
+    #         raise ValueError(f"Non-existent repository path provided: {repo_path}")
 
-        self.repo_path = repo_path
+    #     self.repo_path = repo_path
+    #     self.configs: "dict[str, RPFile]" = {}
+
+    #     if eager_mode:
+    #         self.sync()
+    def __init__(self, host: str, port: str, eager_mode=False):
+        self.link = f"http://{host}:{port}"
         self.configs: "dict[str, RPFile]" = {}
-
         if eager_mode:
             self.sync()
 
     def sync(self):
         """sync configuration with remote"""
-        configs: "dict[str, RPFile]" = {}
-        for name in os.listdir(self.repo_path):
+        req = requests.get(f"{self.link}/configs/", timeout=10)
+        configs = {}
+        configurations = req.json()
+        for name in configurations:
             try:
-                config_path = path.join(self.repo_path, name)
-                with open(config_path, "r", encoding="utf-8") as _f:
-                    source = _f.read()
-
-                config = RPFile(source)
+                config_body = requests.get(f"{self.link}/configs/{name}", timeout=20).text()
+                config = RPFile(config_body)
                 configs[name] = config
             except Exception as ex:
                 print(f"WARNING: Failed to sync config {name}: {ex}")
