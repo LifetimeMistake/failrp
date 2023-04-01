@@ -289,7 +289,7 @@ class ConfigRepository:
         configurations = req.json()
         for name in configurations:
             try:
-                config_body = requests.get(f"{self.link}/configs/{name}", timeout=20).text()
+                config_body = requests.get(f"{self.link}/configs/{name}", timeout=20).text
                 config = RPFile(config_body)
                 configs[name] = config
             except Exception as ex:

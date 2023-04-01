@@ -19,5 +19,6 @@ fi
 
 python3 app.py
 echo "FailRP finished"
+bash
 shutdown 0
 exit

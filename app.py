@@ -11,10 +11,7 @@ REMOTE_MOUNTPOINT=cmdline.get("remote_mountpoint") or "/mnt/repo"
 CACHE_MOUNTPOINT=cmdline.get("cache_mountpoint") or "/mnt/cache"
 CACHE_LABEL=cmdline.get("cache_label") or "FAILRP_CACHE"
 HOST=cmdline.get("host")
-if not HOST:
-    raise Exception("No Host value provided, u stupid fuck")
-
-PORT=int(cmdline.get("port")) or 2021
+PORT=int(cmdline.get("port") or 2021)
 
 VOLUMEFILE = """
 volumes:
@@ -38,7 +35,7 @@ print(f"Local repo at {repo_part.path}")
 
 image_repo = ImageRepository(REMOTE_MOUNTPOINT, CACHE_MOUNTPOINT, True)
 volume_man = VolumeManager(root_disk, repo_part, VOLUMEFILE)
-config_repo = ConfigRepository("localhost", 2021, True) 
+config_repo = ConfigRepository(HOST, PORT, True) 
 
 while True:
     config_name = input("Select config: ")
