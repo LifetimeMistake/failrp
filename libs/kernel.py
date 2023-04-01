@@ -1,11 +1,10 @@
 """File containing Utility class for kernel parameters"""
 
-class KernelCmdlineParser(dict):
+class KernelCmdlineParser:
     """Utility class for kernel parameters"""
-
     def __init__(self):
-        with open("/proc/cmdline", "r", encoding="utf-8") as _f:
-            self.cmdline = _f.read().strip()
+        with open("/proc/cmdline", "r") as f:
+            self.cmdline = f.read().strip()
 
         self.data = {}
         for element in self.cmdline.split():
@@ -15,4 +14,16 @@ class KernelCmdlineParser(dict):
             if key not in self.data:
                 self.data[key] = []
             self.data[key].append(value)
-        super().__init__(self.data)
+
+    def get(self, key):
+        if key not in self.data:
+            return None
+        
+        value = self.data[key]
+        if len(value) == 1:
+            return value[0]
+        
+        return value
+    
+    def __contains__(self, key):
+        return key in self.data

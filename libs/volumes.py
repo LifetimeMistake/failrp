@@ -1,5 +1,5 @@
 """Utility Classes for managing Volumes"""
-from .partitioning import Disk
+from .partitioning import Disk, Partition
 import yaml
 
 class Volume:
