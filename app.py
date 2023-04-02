@@ -3,8 +3,11 @@ from libs.repositories import ImageRepository, ConfigRepository
 from libs.volumes import VolumeManager
 from libs.partitioning import Disk
 from libs.execution import RPFileExecutor
+from pretty import setup
 
 cmdline = KernelCmdlineParser()
+
+wrapper, print, console, status, _logger, progress = setup()
 
 REMOTE_MOUNTPOINT=cmdline.get("remote_mountpoint") or "/mnt/repo"
 # CONFIGS_MOUNTPOINT=cmdline.get("configs_mountpoint") or "/mnt/configs"
@@ -16,11 +19,7 @@ PORT=int(cmdline.get("port") or 2021)
 VOLUMEFILE = """
 volumes:
   bootloader:
-    index: 1
-  windows_reserved:
     index: 2
-  system:
-    index: 3
 """
 
 for disk in Disk.get_all().values():
@@ -30,12 +29,12 @@ for disk in Disk.get_all().values():
             repo_part = part
             break
 
-print(f"Using root disk {root_disk.path}")
-print(f"Local repo at {repo_part.path}")
+_logger.info(f"Using root disk {root_disk.path}")
+_logger.info(f"Local repo at {repo_part.path}")
 
 image_repo = ImageRepository(REMOTE_MOUNTPOINT, CACHE_MOUNTPOINT, True)
 volume_man = VolumeManager(root_disk, repo_part, VOLUMEFILE)
-config_repo = ConfigRepository(HOST, PORT, True) 
+config_repo = ConfigRepository(HOST, PORT, True)
 
 while True:
     config_name = input("Select config: ")
@@ -46,7 +45,7 @@ while True:
 
     print("Invalid config name")
     print(f"Available config files: {', '.join(config_repo.configs.keys())}")
-
-executor = RPFileExecutor(selected_config, image_repo, volume_man)
-executor.compile()
-executor.execute()
+with wrapper:
+  executor = RPFileExecutor(selected_config, image_repo, volume_man)
+  executor.compile()
+  executor.execute()

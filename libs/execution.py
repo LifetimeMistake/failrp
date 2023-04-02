@@ -1,9 +1,16 @@
 from __future__ import annotations
 from abc import abstractmethod, ABC
 import os
+import re
+import sys
+from rich.live import Live
+from rich.console import Console, Group
+from rich.layout import Layout
+from rich.panel import Panel
 import os.path as path
 import tempfile
 import shutil
+from .parsing import format_ocs, parse_output_string
 from .rpfile import RPFile, DeployInstruction, PullInstruction, \
     CopyInstruction, UnpackInstruction, FormatInstruction
 from .formatting import get_supported_filesystems, format_partition
@@ -11,6 +18,10 @@ from .repositories import ImageRepository
 from .volumes import VolumeManager
 from .imaging import deploy_image
 from sh import mount, umount
+from pretty import setup as r_setup
+
+
+wrapper, print, console, status, logger, progress = r_setup()
 
 class Operation(ABC):
     """Generic Operation Class"""
@@ -41,12 +52,30 @@ class DeployOperation(Operation):
         self.target_part = destination.target
 
     def execute(self):
+        status.update(f"Deploying {self.image.name} to {self.target_part.path}...")
         if not self.image.best_path:
             raise FileNotFoundError("Image is unavailable")
+        logger.info(f"Using {self.image.best_path}")
+        def _logger(typ: str):
+            def choose_output(out):
+                parsed_out = parse_output_string(format_ocs(out))
+                if parsed_out:
+                    if parsed_out[2] == 100:
+                        status.update("Cleaning up")
+                        return None
+                    status.update(f"Remaining: {parsed_out[1]}, Rate: {parsed_out[3]} GB/Min, Progress: {parsed_out[2]}%")
+                else:
+                    logger.info(out)
+            def hook(*args, **kw):
+                try:
+                    {"err": choose_output, 
+                    "out": logger.info, 
+                    "in": lambda x : x}[typ](*args, **kw)
+                except:
+                    pass
+            return hook
+        deploy_image(self.image, self.target_part, self.source_volume, io=_logger)
 
-        print(f"Deploying {self.image.name} to {self.target_part.path}...")
-        print(f"Using {self.image.best_path}")
-        deploy_image(self.image, self.target_part, self.source_volume)
 
 class PullOperation(Operation):
     """OperationClass for pulling a repository to device"""
@@ -205,7 +234,7 @@ class RPFileExecutor:
         operations = []
         instructions = self.rpfile.instructions
 
-        print("Starting build")
+        logger.info("Starting build")
         for i, instruction in enumerate(instructions):
             print(f"[{i+1}/{len(instructions)}] {instruction}")
             try:
@@ -222,7 +251,7 @@ class RPFileExecutor:
                     operation = FormatOperation(self, instruction)
                 else:
                     if skip_unsupported:
-                        print(f"Skipping unsupported instruction type: {type(instruction)}")
+                        logger.warning(f"Skipping unsupported instruction type: {type(instruction)}")
                         continue
                     else:
                         raise (f"Unsupported instruction type: {type(instruction)}")
@@ -245,8 +274,9 @@ class RPFileExecutor:
             raise RuntimeError("Executor was not compiled! \
                                Use .compile() to build an operation list.")
 
+        task = progress.add_task("Warming up....", total=len(self.operations))
         for i, _op in enumerate(self.operations):
-            print(f"Executing operation {i+1} of {len(self.operations)}: {type(_op).__name__}")
+            progress.update(task, advance=1, description=f"Executing operation {i+1} of {len(self.operations)}: {type(_op).__name__}")
             try:
                 _op.execute()
             except Exception as ex:

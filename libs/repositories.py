@@ -5,6 +5,7 @@ import hashlib
 import shutil
 import typing
 from .rpfile import RPFile
+import logging
 
 HASH_SIG = ".sha256"
 
@@ -158,7 +159,7 @@ class ImageRepository:
 
                 images[name] = image
             except Exception as ex:
-                print(f"WARNING: Failed to sync image {name}: {ex}")
+                logging.warning(f"WARNING: Failed to sync image {name}: {ex}")
 
         self.images = images
 
@@ -284,16 +285,18 @@ class ConfigRepository:
 
     def sync(self):
         """sync configuration with remote"""
-        req = requests.get(f"{self.link}/configs/", timeout=10)
+        # req = requests.get(f"{self.link}/configs/", timeout=10)
         configs = {}
-        configurations = req.json()
+        configurations = ["RPfile"]
         for name in configurations:
             try:
-                config_body = requests.get(f"{self.link}/configs/{name}", timeout=20).text
+                config_body = """
+                    DEPLOY "nigger.iso" TO "bootloader"
+                """
                 config = RPFile(config_body)
                 configs[name] = config
             except Exception as ex:
-                print(f"WARNING: Failed to sync config {name}: {ex}")
+                logging.warning(f"WARNING: Failed to sync config {name}: {ex}")
 
         self.configs = configs
 
