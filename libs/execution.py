@@ -89,7 +89,7 @@ class PullOperation(Operation):
         self.image_name = image.name
 
     def execute(self):
-        print(f"Pulling {self.image_name}...")
+        status.update(f"Pulling {self.image_name}...")
         # Get image blacklist
         blacklist = []
         for _op in self.executor.executed_operations:
@@ -123,7 +123,7 @@ class CopyOperation(Operation):
             raise FileNotFoundError("Image is unavailable")
 
         mount_path = tempfile.mkdtemp()
-        print(f"Mounting {self.target_part.path} at {mount_path}")
+        logger.info(f"Mounting {self.target_part.path} at {mount_path}")
         mount(self.target_part.path, mount_path)
 
         try:
@@ -133,14 +133,13 @@ class CopyOperation(Operation):
             if not path.isdir(destination_dir):
                 raise FileNotFoundError(f"Path '/{path.dirname(volume_path)}' \
                                         does not exist in the target volume.")
-
-            print(f"Copying {self.image.name} to {destination_path}...")
-            print(f"Using {self.image.best_path}")
+            status.update(f"Copying {self.image.name} to {destination_path}...")
+            logger.info(f"Using {self.image.best_path}")
             shutil.copy(self.image.best_path, destination_path)
         finally:
             umount(mount_path)
             os.rmdir(mount_path)
-            print("Unmounted working volume")
+            logger.info("Unmounted working volume")
 
 class UnpackOperation(Operation):
     """Operation Class for Unzipping archives to device"""
@@ -176,7 +175,7 @@ class UnpackOperation(Operation):
             raise FileNotFoundError("Image is unavailable")
 
         mount_path = tempfile.mkdtemp()
-        print(f"Mounting {self.target_part.path} at {mount_path}")
+        logger.info(f"Mounting {self.target_part.path} at {mount_path}")
         mount(self.target_part.path, mount_path)
 
         try:
@@ -187,13 +186,13 @@ class UnpackOperation(Operation):
                 raise FileNotFoundError(f"Path '/{path.dirname(volume_path)}' \
                                         does not exist in the target volume.")
 
-            print(f"Unpacking {self.image.name} to {destination_path}...")
-            print(f"Using {self.image.best_path}")
+            status.update(f"Unpacking {self.image.name} to {destination_path}...")
+            logger.info(f"Using {self.image.best_path}")
             shutil.unpack_archive(self.image.best_path, destination_path)
         finally:
             umount(mount_path)
             os.rmdir(mount_path)
-            print("Unmounted working volume")
+            logger.info("Unmounted working volume")
 
 class FormatOperation(Operation):
     """Operation Class for Formatting a partition on device"""
@@ -217,7 +216,7 @@ class FormatOperation(Operation):
         self.target_part = destination.target
 
     def execute(self):
-        print(f"Formatting {self.target_part.path} to {self.fstype}...")
+        status.update(f"Formatting {self.target_part.path} to {self.fstype}...")
         format_partition(self.target_part, self.fstype, verbose=True)
 
 class RPFileExecutor:
