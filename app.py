@@ -19,12 +19,14 @@ PORT=int(cmdline.get("port") or 2021)
 
 VOLUMEFILE = """
 volumes:
-  bootloader:
+  recovery:
     index: 1
-  windows_reserved:
+  bootloader:
     index: 2
-  system:
+  reserved:
     index: 3
+  system:
+    index: 4
 """
 
 for disk in Disk.get_all().values():

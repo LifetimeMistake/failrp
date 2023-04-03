@@ -3,7 +3,6 @@ from __future__ import annotations
 import os.path as path
 import typing
 import json
-from libs.formatting import format_partition
 import re
 from sh import e2label, lsblk, mount, umount, mkdir
 
@@ -216,6 +215,3 @@ class Partition:
             umount(self.path)
 
         self.mountpoint = None
-    
-    def format(self, fs: str, verbose=False):
-        format_partition(self, fs, verbose)

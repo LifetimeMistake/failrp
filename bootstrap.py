@@ -4,6 +4,7 @@ from banner import banner
 from rich.style import Style
 from rich.text import Text
 from libs.partitioning import Partition
+from libs.formatting import format_partition
 from libs.kernel import KernelCmdlineParser
 from libs.picker import AnsiPicker
 from sh import mount, beep, mkdir
@@ -66,7 +67,7 @@ def setup_local_repo():
         picked: Partition = picker.ask(15, msg="pick your new cache partition")
         if picked:
             logger.info(f"Formatting partition")
-            picked.format("ext4")
+            format_partition(picked, "ext4")
             picked.set_fslabel(CACHE_LABEL)
             local_cache_part = picked
         else:

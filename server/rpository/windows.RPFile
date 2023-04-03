@@ -1,4 +1,0 @@
-PULL "img.img"
-DEPLOY "img.img" TO "system"
-UNPACK "compressed.zip" "system:/vmki/obrazy/dsm"
-COPY "clonezilla.iso" "system:/vmki/obrazy/obraz2.iso"
