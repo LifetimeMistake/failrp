@@ -5,6 +5,7 @@ from rich.style import Style
 from rich.text import Text
 from libs.partitioning import Partition
 from libs.kernel import KernelCmdlineParser
+from libs.picker import AnsiPicker
 from sh import mount, beep, mkdir
 from pretty import setup as r_setup
 
@@ -59,7 +60,17 @@ def setup_local_repo():
 
     if not local_cache_part:
         logger.warning("Local repo not found")
-        return False
+        parts = Partition.get_all()
+        parts["Cancel"] = None
+        picker = AnsiPicker(parts)
+        picked: Partition = picker.ask(15, msg="pick your new cache partition")
+        if picked:
+            logger.info(f"Formatting partition")
+            picked.format("ext4")
+            picked.set_fslabel(CACHE_LABEL)
+            local_cache_part = picked
+        else:
+            return False
 
     try:
         local_cache_part.mount(CACHE_MOUNTPOINT, True)
