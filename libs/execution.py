@@ -10,6 +10,7 @@ from rich.panel import Panel
 import os.path as path
 import tempfile
 import shutil
+from .pretty_copy import copy
 from .parsing import format_ocs, parse_output_string
 from .rpfile import RPFile, DeployInstruction, PullInstruction, \
     CopyInstruction, UnpackInstruction, FormatInstruction
@@ -135,7 +136,7 @@ class CopyOperation(Operation):
                                         does not exist in the target volume.")
             status.update(f"Copying {self.image.name} to {destination_path}...")
             logger.info(f"Using {self.image.best_path}")
-            shutil.copy(self.image.best_path, destination_path)
+            copy(self.image.best_path, destination_path, progress)
         finally:
             umount(mount_path)
             os.rmdir(mount_path)
