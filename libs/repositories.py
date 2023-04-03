@@ -6,8 +6,10 @@ import shutil
 import typing
 from .rpfile import RPFile
 import logging
-
+from pretty import setup
+from libs.pretty_copy import copy
 HASH_SIG = ".sha256"
+wrapper, print, console, status, _logger, progress = setup()
 
 def compute_hash(file):
     """computes hash from file"""
@@ -60,7 +62,7 @@ class Image:
 
     def pull(self, destination):
         """pulls newest image from repo"""
-        shutil.copy(self.remote_path, destination)
+        copy(self.remote_path, destination, progress)
         self.local_path = destination
         write_image_hash(destination, self.remote_hash)
         self.local_hash = self.remote_hash
