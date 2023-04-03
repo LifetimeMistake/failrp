@@ -285,14 +285,12 @@ class ConfigRepository:
 
     def sync(self):
         """sync configuration with remote"""
-        # req = requests.get(f"{self.link}/configs/", timeout=10)
+        req = requests.get(f"{self.link}/configs/", timeout=10)
         configs = {}
-        configurations = ["RPfile"]
+        configurations = req.json()
         for name in configurations:
             try:
-                config_body = """
-                    DEPLOY "nigger.iso" TO "bootloader"
-                """
+                config_body = requests.get(f"{self.link}/configs/{name}", timeout=20).text
                 config = RPFile(config_body)
                 configs[name] = config
             except Exception as ex:

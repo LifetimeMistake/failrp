@@ -17,6 +17,8 @@ setup:
 	cp install.sh "$(FS_ROOT)/app"
 	cp init.sh "$(FS_ROOT)/app"
 	cp app.py "$(FS_ROOT)/app"
+	cp banner.py "$(FS_ROOT)/app"
+	cp pretty.py "$(FS_ROOT)/app"
 	cp bootstrap.py "$(FS_ROOT)/app"
 	cp start-failrp.service "$(FS_ROOT)/etc/systemd/system/"
 

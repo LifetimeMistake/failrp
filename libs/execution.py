@@ -256,14 +256,11 @@ class RPFileExecutor:
                     else:
                         raise (f"Unsupported instruction type: {type(instruction)}")
             except Exception as ex:
-                print("Build failed!")
-                print(f"ERROR: {ex}")
-                return False
+                raise RuntimeError("Build failed!") from ex
 
             operations.append(operation)
 
         self.operations = operations
-        return True
 
     def execute(self):
         """Executes RPFile"""
@@ -280,12 +277,9 @@ class RPFileExecutor:
             try:
                 _op.execute()
             except Exception as ex:
-                print("Execution failed!")
-                print(f"ERROR: {ex}")
-                return False
+                raise RuntimeError("Execution failed!") from ex
 
             self.executed_operations.append(_op)
 
         print("Done executing RPFile")
         self.executed_operations.clear()
-        return True
