@@ -72,9 +72,9 @@ def deploy_image(image: Image, target_partition: Partition, source_part=None, io
             ocs_sr("-e1", "auto", "-e2", "-t", "-r", "-k", "-batch", "-scr", "-nogui",
             "-or", root_dir, "-f", source_part, "restoreparts", source_dir, target_device, _in=io("in"), _out=io("out"), _err=io("err"))
         else:
-            pass
-            # ocs_sr("-e1", "auto", "-e2", "-t", "-r", "-k", "-batch", "-scr", "-nogui",
-            #     "-or", root_dir, "-f", source_part, "restoreparts", source_dir, target_device, _fg=True)
+            # pass
+            ocs_sr("-e1", "auto", "-e2", "-t", "-r", "-k", "-batch", "-scr", "-nogui",
+                "-or", root_dir, "-f", source_part, "restoreparts", source_dir, target_device, _fg=True)
             
     finally:
         unmount_image(mount_path)

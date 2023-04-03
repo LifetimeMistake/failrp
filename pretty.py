@@ -14,7 +14,7 @@ group = console.Group(
     r_progress,
     r_stat
 )
-r_wrapper = live.Live(group)
+r_wrapper = live.Live(group, refresh_per_second=24)
 def setup(log_level=None):
     """sets up the environment for rich"""
 
@@ -22,7 +22,7 @@ def setup(log_level=None):
         log_level = "INFO"
     logging.basicConfig(
         level=log_level, format=FORMAT,
-        handlers=[RichHandler()]
+        handlers=[RichHandler(show_path=False, log_time_format="[%X]")]
     )
     r_logger = logging.getLogger("rich")
     

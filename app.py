@@ -3,6 +3,7 @@ from libs.repositories import ImageRepository, ConfigRepository
 from libs.volumes import VolumeManager
 from libs.partitioning import Disk
 from libs.execution import RPFileExecutor
+from libs.picker import AnsiPicker
 from pretty import setup
 
 cmdline = KernelCmdlineParser()
@@ -40,15 +41,19 @@ image_repo = ImageRepository(REMOTE_MOUNTPOINT, CACHE_MOUNTPOINT, True)
 volume_man = VolumeManager(root_disk, repo_part, VOLUMEFILE)
 config_repo = ConfigRepository(HOST, PORT, True)
 
-while True:
-    config_name = input("Select config: ")
-    selected_config = config_repo.get(config_name)
+# while True:
+#     config_name = input("Select config: ")
+#     selected_config = config_repo.get(config_name)
 
-    if selected_config:
-        break
+#     if selected_config:
+#         break
 
-    print("Invalid config name")
-    print(f"Available config files: {', '.join(config_repo.configs.keys())}")
+#     print("Invalid config name")
+#     print(f"Available config files: {', '.join(config_repo.configs.keys())}")
+
+picker = AnsiPicker(config_repo.configs)
+selected_config = picker.ask(15)
+
 with wrapper:
   executor = RPFileExecutor(selected_config, image_repo, volume_man)
   executor.compile()
