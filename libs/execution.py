@@ -3,14 +3,11 @@ from abc import abstractmethod, ABC
 import os
 import re
 import sys
-from rich.live import Live
-from rich.console import Console, Group
-from rich.layout import Layout
-from rich.panel import Panel
+from rich.progress import Progress
 import os.path as path
 import tempfile
 import shutil
-from .pretty_copy import copy
+from .pretty_copy import copy_with_callback
 from .parsing import format_ocs, parse_output_string
 from .rpfile import RPFile, DeployInstruction, PullInstruction, \
     CopyInstruction, UnpackInstruction, FormatInstruction
@@ -18,9 +15,9 @@ from .formatting import get_supported_filesystems, format_partition
 from .repositories import ImageRepository
 from .volumes import VolumeManager
 from .imaging import deploy_image
+from .constants import COPY_BLOCK_SIZE
+from .pretty import setup as r_setup
 from sh import mount, umount
-from pretty import setup as r_setup
-
 
 wrapper, print, console, status, logger, progress = r_setup()
 
@@ -42,10 +39,10 @@ class DeployOperation(Operation):
             raise FileNotFoundError(f"Image '{instruction.image}' unavailable")
 
         if not destination:
-            raise NameError(f"Deploy destination '{destination.name}' is not defined")
+            raise NameError(f"Deploy destination '{instruction.volume}' is not defined")
 
         if not destination.is_available:
-            raise FileNotFoundError(f"Deploy destination '{destination.name}' \
+            raise FileNotFoundError(f"Deploy destination '{instruction.volume}' \
                                     unavailable on this system")
 
         self.image = image
@@ -97,7 +94,12 @@ class PullOperation(Operation):
             if isinstance(_op, PullOperation):
                 blacklist.append(_op.image_name)
 
-        self.executor.image_repo.pull(self.image_name, disallowed_deletions=blacklist)
+        task = progress.add_task(f"Pulling {self.image_name}...")
+
+        self.executor.image_repo.pull(self.image_name, disallowed_deletions=blacklist, 
+            progress_callback=lambda copied, copied_total, total: progress.update(task, completed=copied_total, total=total))
+            
+        progress.remove_task(task)
 
 class CopyOperation(Operation):
     """Operation Class for copying a file to device"""
@@ -109,10 +111,10 @@ class CopyOperation(Operation):
             raise FileNotFoundError(f"Image '{instruction.image}' unavailable")
 
         if not destination:
-            raise NameError(f"Deploy destination '{destination.name}' is not defined")
+            raise NameError(f"Deploy destination '{instruction.volume}' is not defined")
 
         if not destination.is_available:
-            raise FileNotFoundError(f"Copy destination '{destination.name}' \
+            raise FileNotFoundError(f"Copy destination '{instruction.volume}' \
                                     unavailable on this system")
 
         self.image = image
@@ -136,7 +138,17 @@ class CopyOperation(Operation):
                                         does not exist in the target volume.")
             status.update(f"Copying {self.image.name} to {destination_path}...")
             logger.info(f"Using {self.image.best_path}")
-            copy(self.image.best_path, destination_path, progress)
+
+            task = progress.add_task(f"Copying {self.image.name} to {destination_path}...")
+
+            copy_with_callback(
+                self.image.best_path, 
+                destination_path, 
+                callback=lambda copied, copied_total, total: progress.update(task, completed=copied_total, total=total),
+                follow_symlinks=False,
+                buffer_size=COPY_BLOCK_SIZE)
+
+            progress.remove_task(task)
         finally:
             umount(mount_path)
             os.rmdir(mount_path)
@@ -161,10 +173,10 @@ class UnpackOperation(Operation):
                                       Supported formats: '{', '.join(supported_exts)}'")
 
         if not destination:
-            raise NameError(f"Deploy destination '{destination.name}' is not defined")
+            raise NameError(f"Deploy destination '{instruction.volume}' is not defined")
 
         if not destination.is_available:
-            raise FileNotFoundError(f"Copy destination '{destination.name}' \
+            raise FileNotFoundError(f"Copy destination '{instruction.volume}' \
                                     unavailable on this system")
 
         self.image = image
@@ -207,10 +219,10 @@ class FormatOperation(Operation):
                              supported filesystems: '{', '.join(supported_filesystems)}")
 
         if not destination:
-            raise NameError(f"Format target '{destination.name}' is not defined")
+            raise NameError(f"Format target '{instruction.volume}' is not defined")
 
         if not destination.is_available:
-            raise FileNotFoundError(f"Copy destination '{destination.name}' \
+            raise FileNotFoundError(f"Copy destination '{instruction.volume}' \
                                     is unavailable on this system")
 
         self.fstype = fstype
@@ -273,7 +285,7 @@ class RPFileExecutor:
 
         task = progress.add_task("Warming up....", total=len(self.operations))
         for i, _op in enumerate(self.operations):
-            progress.update(task, advance=1, description=f"Executing operation {i+1} of {len(self.operations)}: {type(_op).__name__}")
+            progress.update(task, completed=len(self.executed_operations), total=len(self.operations), description=f"Executing operation {i+1} of {len(self.operations)}: {type(_op).__name__}")
             try:
                 _op.execute()
             except Exception as ex:

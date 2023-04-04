@@ -4,9 +4,7 @@
 import os
 import pathlib
 import shutil
-import rich
-
-BUFFER_SIZE = 4096 * 4096
+from .constants import COPY_BLOCK_SIZE
 
 
 class SameFileError(OSError):
@@ -19,7 +17,7 @@ class SpecialFileError(OSError):
 
 
 def copy_with_callback(
-    src, dest, callback=None, follow_symlinks=True, buffer_size=BUFFER_SIZE
+    src, dest, callback=None, follow_symlinks=True, buffer_size=COPY_BLOCK_SIZE
 ):
     """ Copy file with a callback. 
         callback, if provided, must be a callable and will be 
@@ -86,17 +84,3 @@ def _copyfileobj(fsrc, fdest, callback, total, length):
         copied += len(buf)
         if callback is not None:
             callback(len(buf), copied, total)
-from rich.progress import Progress
-progress = Progress()
-def copy(src:str, trg:str, progress=progress):
-    size = os.stat(src).st_size
-    task = progress.add_task(f"Copying {src} to {trg}")
-    dest = copy_with_callback(
-            src,
-            trg,
-            follow_symlinks=False,
-            callback=None,
-            callback=lambda copied, total_copied, total: progress.update(task, completed=copied),
-            buffer_size=BUFFER_SIZE,
-        )
-    progress.remove_task(task)

@@ -73,5 +73,3 @@ class AnsiPicker:
             idx = list(self.options.keys()).index(default_key)
         out = pick_from_list(list(self.options.keys()), idx, timeout, msg=msg)
         return self.options[out]
-
-

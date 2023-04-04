@@ -1,0 +1,8 @@
+HASH_SIG = ".sha256"
+HASH_BLOCK_SIZE=4096*4096
+COPY_BLOCK_SIZE=4096*4096
+LSBLK_DEFAULT_COLUMNS=["size", "rm", "partuuid", "uuid", "fstype", "partlabel", "label", "mountpoint"]
+DEFAULT_REMOTE_MOUNTPOINT="/mnt/repo"
+DEFAULT_CACHE_MOUNTPOINT="/mnt/cache"
+DEFAULT_CACHE_LABEL="FAILRP_CACHE"
+DEFAULT_PORT=2021

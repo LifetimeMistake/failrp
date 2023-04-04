@@ -4,18 +4,18 @@ from libs.volumes import VolumeManager
 from libs.partitioning import Disk
 from libs.execution import RPFileExecutor
 from libs.picker import AnsiPicker
-from pretty import setup
+from libs.pretty import setup
+from libs.constants import DEFAULT_REMOTE_MOUNTPOINT, DEFAULT_CACHE_MOUNTPOINT, DEFAULT_CACHE_LABEL, DEFAULT_PORT
 
 cmdline = KernelCmdlineParser()
 
 wrapper, print, console, status, _logger, progress = setup()
 
-REMOTE_MOUNTPOINT=cmdline.get("remote_mountpoint") or "/mnt/repo"
-# CONFIGS_MOUNTPOINT=cmdline.get("configs_mountpoint") or "/mnt/configs"
-CACHE_MOUNTPOINT=cmdline.get("cache_mountpoint") or "/mnt/cache"
-CACHE_LABEL=cmdline.get("cache_label") or "FAILRP_CACHE"
+REMOTE_MOUNTPOINT=cmdline.get("remote_mountpoint") or DEFAULT_REMOTE_MOUNTPOINT
+CACHE_MOUNTPOINT=cmdline.get("cache_mountpoint") or DEFAULT_CACHE_MOUNTPOINT
+CACHE_LABEL=cmdline.get("cache_label") or DEFAULT_CACHE_LABEL
 HOST=cmdline.get("host")
-PORT=int(cmdline.get("port") or 2021)
+PORT=int(cmdline.get("port") or DEFAULT_PORT)
 
 VOLUMEFILE = """
 volumes:
@@ -42,16 +42,6 @@ _logger.info(f"Local repo at {repo_part.path}")
 image_repo = ImageRepository(REMOTE_MOUNTPOINT, CACHE_MOUNTPOINT, True)
 volume_man = VolumeManager(root_disk, repo_part, VOLUMEFILE)
 config_repo = ConfigRepository(HOST, PORT, True)
-
-# while True:
-#     config_name = input("Select config: ")
-#     selected_config = config_repo.get(config_name)
-
-#     if selected_config:
-#         break
-
-#     print("Invalid config name")
-#     print(f"Available config files: {', '.join(config_repo.configs.keys())}")
 
 picker = AnsiPicker(config_repo.configs)
 selected_config = picker.ask(15)

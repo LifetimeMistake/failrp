@@ -7,17 +7,18 @@ from libs.partitioning import Partition
 from libs.formatting import format_partition
 from libs.kernel import KernelCmdlineParser
 from libs.picker import AnsiPicker
+from libs.constants import DEFAULT_REMOTE_MOUNTPOINT, DEFAULT_CACHE_MOUNTPOINT, DEFAULT_CACHE_LABEL
 from sh import mount, beep, mkdir
-from pretty import setup as r_setup
+from libs.pretty import setup as r_setup
 
 
 wrapper, print, console, status, logger, _ = r_setup()
 
 cmdline = KernelCmdlineParser()
 
-REMOTE_MOUNTPOINT=cmdline.get("remote_mountpoint") or "/mnt/repo"
-CACHE_MOUNTPOINT=cmdline.get("cache_mountpoint") or "/mnt/cache"
-CACHE_LABEL=cmdline.get("cache_label") or "FAILRP_CACHE"
+REMOTE_MOUNTPOINT=cmdline.get("remote_mountpoint") or DEFAULT_REMOTE_MOUNTPOINT
+CACHE_MOUNTPOINT=cmdline.get("cache_mountpoint") or DEFAULT_CACHE_MOUNTPOINT
+CACHE_LABEL=cmdline.get("cache_label") or DEFAULT_CACHE_LABEL
 ERROR_TIMEOUT=30
 
 print(Text(banner(), style=Style(color="blue")))
