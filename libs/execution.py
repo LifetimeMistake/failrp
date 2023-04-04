@@ -96,9 +96,11 @@ class PullOperation(Operation):
 
         task = progress.add_task(f"Pulling {self.image_name}...")
 
-        self.executor.image_repo.pull(self.image_name, disallowed_deletions=blacklist, 
+        try:
+            self.executor.image_repo.pull(self.image_name, disallowed_deletions=blacklist, 
             progress_callback=lambda copied, copied_total, total: progress.update(task, completed=copied_total, total=total))
-            
+        except IOError:
+            logger.warning("Cannot pull image, Insufficient space!")
         progress.remove_task(task)
 
 class CopyOperation(Operation):

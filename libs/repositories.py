@@ -256,6 +256,7 @@ class ImageRepository:
         if free_space < image_size:
             if not allow_deletion or not self.shrink_storage(image_size, disallowed_deletions):
                 raise IOError("Insufficient storage space to save image")
+            return
 
         destination = path.join(self.storage_path, name)
         image.pull(destination, progress_callback=progress_callback)
