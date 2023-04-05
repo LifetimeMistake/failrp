@@ -10,14 +10,15 @@ import shutil
 from .pretty_copy import copy_with_callback
 from .parsing import format_ocs, parse_output_string
 from .rpfile import RPFile, DeployInstruction, PullInstruction, \
-    CopyInstruction, UnpackInstruction, FormatInstruction
+    CopyInstruction, UnpackInstruction, FormatInstruction, MkdirInstruction, \
+    ShellInstruction
 from .formatting import get_supported_filesystems, format_partition
 from .repositories import ImageRepository
 from .volumes import VolumeManager
 from .imaging import deploy_image
 from .constants import COPY_BLOCK_SIZE
 from .pretty import setup as r_setup
-from sh import mount, umount
+from sh import mount, umount, bash
 
 wrapper, print, console, status, logger, progress = r_setup()
 
@@ -234,6 +235,47 @@ class FormatOperation(Operation):
         status.update(f"Formatting {self.target_part.path} to {self.fstype}...")
         format_partition(self.target_part, self.fstype, verbose=True)
 
+class MkdirOperation(Operation):
+    """Operation Class for creating directories on volumes"""
+    def __init__(self, executor: RPFileExecutor, instruction: MkdirInstruction):
+        destination = executor.volume_man.get(instruction.volume)
+
+        if not destination:
+            raise NameError(f"Deploy destination '{instruction.volume}' is not defined")
+
+        if not destination.is_available:
+            raise FileNotFoundError(f"Copy destination '{instruction.volume}' \
+                                    unavailable on this system")
+
+        self.target_part = destination.target
+        self.destination_path = instruction.path
+
+    def execute(self):
+        if not self.image.best_path:
+            raise FileNotFoundError("Image is unavailable")
+
+        mount_path = tempfile.mkdtemp()
+        logger.info(f"Mounting {self.target_part.path} at {mount_path}")
+        mount(self.target_part.path, mount_path)
+
+        try:
+            volume_path = self.destination_path.lstrip('/')
+            destination_path = path.join(mount_path, volume_path)
+
+            status.update(f"Creating directory {self.destination_path}...")
+            os.makedirs(destination_path, parents=True, exist_ok=True)
+        finally:
+            umount(mount_path)
+            os.rmdir(mount_path)
+            logger.info("Unmounted working volume")
+
+class ShellOperation(Operation):
+    def __init__(self, executor: RPFileExecutor, instruction: ShellInstruction):
+        self.command = instruction.command
+
+    def execute(self):
+        bash("-c", self.command, _fg=True)
+
 class RPFileExecutor:
     """RPFile execution class"""
     def __init__(self, rpfile: RPFile, image_repo: ImageRepository, volume_man: VolumeManager):
@@ -263,6 +305,10 @@ class RPFileExecutor:
                     operation = UnpackOperation(self, instruction)
                 elif isinstance(instruction, FormatInstruction):
                     operation = FormatOperation(self, instruction)
+                elif isinstance(instruction, MkdirInstruction):
+                    operation = MkdirOperation(self, instruction)
+                elif isinstance(instruction, ShellInstruction):
+                    operation = ShellOperation(self, instruction)
                 else:
                     if skip_unsupported:
                         logger.warning(f"Skipping unsupported instruction type: {type(instruction)}")

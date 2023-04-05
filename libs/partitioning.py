@@ -5,7 +5,7 @@ import typing
 import json
 import re
 from .constants import LSBLK_DEFAULT_COLUMNS
-from sh import e2label, lsblk, mount, umount, mkdir
+from sh import e2label, lsblk, mount, umount, mkdir, udevadm
 
 lsblk_unk_column = re.compile(r"lsblk: unknown column: (?P<column>.*)")
 lsblk_unk_device = re.compile(r"lsblk: (?P<device>.*): not a block device")
@@ -58,6 +58,18 @@ class Disk:
         self.size: int = size
         self.removable: bool = removable
         self.partitions: list[Partition] = partitions
+
+    @staticmethod
+    def from_partition(_part: Partition) -> Disk:
+        """returns the disk owning the given partition"""
+        disks = Disk.get_all().values()
+
+        for disk in disks:
+            for part in disk.partitions:
+                if _part.path != part.path:
+                    return disk
+
+        raise FileNotFoundError("Could not find any disk with the given partition")
 
     @staticmethod
     def from_device(_path) -> Disk:
@@ -191,6 +203,7 @@ class Partition:
             label = ""
 
         e2label(self.path, label)
+        udevadm("trigger")
 
     def mount(self, mountpoint: str, create_mountpoint=True):
         """mount partition to system"""

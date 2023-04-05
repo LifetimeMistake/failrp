@@ -5,6 +5,26 @@ import os.path as path
 from .partitioning import Partition
 from sh import Command
 
+FS_EXTRA_PARAMS = {
+    "bfs": [],
+    "btrfs": ["-f"],
+    "exfat": [],
+    "ext2": ["-F"],
+    "ext3": ["-F"],
+    "ext4": ["-F"],
+    "f2fs": ["-f"],
+    "fat": [],
+    "minix": [],
+    "msdos": [],
+    "nilfs2": ["-f"],
+    "ntfs": ["-F", "-f"],
+    "reiser4": ["-y", "-f"],
+    "reiserfs": ["-f"],
+    "udf": [],
+    "vfat": [],
+    "xfs": ["-f"]
+}
+
 def get_supported_filesystems():
     """returns supported Filesystems"""
     filesystems = []
@@ -16,6 +36,10 @@ def get_supported_filesystems():
                 continue
 
             _fs = '.'.join(path.basename(file).split('.')[1:])
+            if _fs not in FS_EXTRA_PARAMS:
+                # FS is *technically* supported but we don't know the required params
+                continue
+
             filesystems.append(_fs)
 
     return filesystems
@@ -27,8 +51,10 @@ def format_partition(part: Partition, _fs: str, verbose=False):
         raise ValueError(f"Unsupported filesystem provided: '{_fs}', supported filesystems: \
                          '{', '.join(supported_filesystems)}")
 
+    params = [*FS_EXTRA_PARAMS[_fs], part.path]
+
     format_command = Command(f"mkfs.{_fs}")
     if verbose:
-        format_command("-F", part.path, _fg=True)
+        format_command(params, _fg=True)
     else:
-        format_command("-F", part.path)
+        format_command(params)
