@@ -1,0 +1,9 @@
+volumes:
+  recovery:
+    index: 1
+  bootloader:
+    index: 2
+  reserved:
+    index: 3
+  system:
+    index: 4

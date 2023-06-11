@@ -6,13 +6,18 @@ app.debug = True
 
 @app.route("/configs/<config>")
 def host_file(config: str):
-     with open(f"rpository/{config}", "r", encoding="utf-8") as _f:
+    with open(f"rpository/{config}", "r", encoding="utf-8") as _f:
         return _f.read()
+    
 @app.route("/configs/")
 def list_files():
     return os.listdir("rpository")
 
-@app.route("/volumes")
-def send_volumes():
-    with open("db/file1.yaml", "r", encoding="utf-8") as _f:
+@app.route("/labels/<label_file>")
+def host_label(label_file: str):
+    with open(f"partition_labels/{label_file}", "r", encoding="utf-8") as _f:
         return _f.read()
+
+@app.route("/labels/")
+def send_labels():
+    return os.listdir("partition_labels")

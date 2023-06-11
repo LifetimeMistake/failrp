@@ -6,6 +6,7 @@ from libs.execution import RPFileExecutor
 from libs.picker import AnsiPicker
 from libs.pretty import setup
 from libs.constants import DEFAULT_REMOTE_MOUNTPOINT, DEFAULT_CACHE_MOUNTPOINT, DEFAULT_CACHE_LABEL, DEFAULT_PORT
+import requests, logging
 
 cmdline = KernelCmdlineParser()
 
@@ -17,17 +18,19 @@ CACHE_LABEL=cmdline.get("cache_label") or DEFAULT_CACHE_LABEL
 HOST=cmdline.get("host")
 PORT=int(cmdline.get("port") or DEFAULT_PORT)
 
-VOLUMEFILE = """
-volumes:
-  recovery:
-    index: 1
-  bootloader:
-    index: 2
-  reserved:
-    index: 3
-  system:
-    index: 4
-"""
+req = requests.get(f"{HOST}:{PORT}/labels/", timeout=10)
+labels = {}
+_configurations = req.json()
+for name in _configurations:
+    try:
+        config_body = requests.get(f"{HOST}:{PORT}/labels/{name}", timeout=20).text
+        labels[name] = config_body
+    except Exception as ex:
+        logging.warning(f"WARNING: Failed to download config {name}: {ex}")
+
+picker = AnsiPicker(labels)
+
+VOLUMEFILE = picker.ask(15)
 
 for disk in Disk.get_all().values():
     for part in disk.partitions:
