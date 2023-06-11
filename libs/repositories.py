@@ -4,16 +4,31 @@ import os.path as path
 import hashlib
 import shutil
 import typing
+from rich.progress import Progress
 from .rpfile import RPFile
+from .pretty import setup
+from .constants import HASH_SIG, HASH_BLOCK_SIZE, COPY_BLOCK_SIZE
+import logging
 
-HASH_SIG = ".sha256"
+wrapper, print, console, status, _logger, progress = setup()
 
-def compute_hash(file):
+def compute_hash(file, progress_callback=None):
     """computes hash from file"""
+
+    if progress_callback is not None and not callable(progress_callback):
+        raise ValueError("Progress callback is not callable")
+
     __hash = hashlib.sha256()
+    total_read = 0
+    total_size = os.stat(file).st_size
+
     with open(file, "rb") as _f:
-        for block in iter(lambda: _f.read(4096), b""):
+        for block in iter(lambda: _f.read(HASH_BLOCK_SIZE), b""):
             __hash.update(block)
+            if progress_callback:
+                block_size = len(block)
+                total_read += block_size
+                progress_callback(block_size, total_read, total_size)
 
     return __hash.hexdigest()
 
@@ -57,9 +72,26 @@ class Image:
         self.remote_hash = remote_hash
         self.local_hash = local_hash
 
-    def pull(self, destination):
+    def pull(self, destination, progress_callback=None):
         """pulls newest image from repo"""
-        shutil.copy(self.remote_path, destination)
+        if progress_callback is not None and not callable(progress_callback):
+            raise ValueError("Progress callback is not callable")
+
+        if os.path.isfile(destination):
+            os.remove(destination)
+
+        total_read = 0
+        total_size = os.stat(self.remote_path).st_size
+
+        with open(self.remote_path, "rb") as _fsrc:
+            with open(destination, "wb") as _fdst:
+                for block in iter(lambda: _fsrc.read(COPY_BLOCK_SIZE), b""):
+                    _fdst.write(block)
+                    if progress_callback:
+                        block_size = len(block)
+                        total_read += block_size
+                        progress_callback(block_size, total_read, total_size)
+
         self.local_path = destination
         write_image_hash(destination, self.remote_hash)
         self.local_hash = self.remote_hash
@@ -145,7 +177,10 @@ class ImageRepository:
                 remote_hash = read_image_hash(remote_path) if remote_exists else None
 
                 if local_exists and not local_hash:
-                    local_hash = compute_hash(local_path)
+                    hash_progress = Progress()
+                    task = hash_progress.add_task(f"Computing checksum for image '{name}'")
+                    local_hash = compute_hash(local_path, lambda copied, copied_total, total: hash_progress.update(task, completed=copied_total, total=total))
+                    hash_progress.remove_task(task)
                     write_image_hash(local_path, local_hash)
 
                 image = Image(
@@ -158,7 +193,7 @@ class ImageRepository:
 
                 images[name] = image
             except Exception as ex:
-                print(f"WARNING: Failed to sync image {name}: {ex}")
+                logging.warning(f"WARNING: Failed to sync image {name}: {ex}")
 
         self.images = images
 
@@ -195,7 +230,7 @@ class ImageRepository:
 
 
     def pull(self, name, force=False, allow_deletion=True,
-             disallowed_deletions: "typing.Optional[list[Image]]" =None):
+             disallowed_deletions: "typing.Optional[list[Image]]" =None, progress_callback=None):
         """Pulls latest image from repository"""
         if not disallowed_deletions:
             disallowed_deletions = []
@@ -221,9 +256,10 @@ class ImageRepository:
         if free_space < image_size:
             if not allow_deletion or not self.shrink_storage(image_size, disallowed_deletions):
                 raise IOError("Insufficient storage space to save image")
+            return
 
         destination = path.join(self.storage_path, name)
-        image.pull(destination)
+        image.pull(destination, progress_callback=progress_callback)
 
     def get(self, name, default=None):
         """returns image with given name"""
@@ -293,7 +329,7 @@ class ConfigRepository:
                 config = RPFile(config_body)
                 configs[name] = config
             except Exception as ex:
-                print(f"WARNING: Failed to sync config {name}: {ex}")
+                logging.warning(f"WARNING: Failed to sync config {name}: {ex}")
 
         self.configs = configs
 

@@ -1,16 +1,26 @@
 from __future__ import annotations
 from abc import abstractmethod, ABC
 import os
+import re
+import sys
+from rich.progress import Progress
 import os.path as path
 import tempfile
 import shutil
+from .pretty_copy import copy_with_callback
+from .parsing import format_ocs, parse_output_string
 from .rpfile import RPFile, DeployInstruction, PullInstruction, \
-    CopyInstruction, UnpackInstruction, FormatInstruction
+    CopyInstruction, UnpackInstruction, FormatInstruction, MkdirInstruction, \
+    ShellInstruction
 from .formatting import get_supported_filesystems, format_partition
 from .repositories import ImageRepository
 from .volumes import VolumeManager
 from .imaging import deploy_image
-from sh import mount, umount
+from .constants import COPY_BLOCK_SIZE
+from .pretty import setup as r_setup
+from sh import mount, umount, bash
+
+wrapper, print, console, status, logger, progress = r_setup()
 
 class Operation(ABC):
     """Generic Operation Class"""
@@ -30,10 +40,10 @@ class DeployOperation(Operation):
             raise FileNotFoundError(f"Image '{instruction.image}' unavailable")
 
         if not destination:
-            raise NameError(f"Deploy destination '{destination.name}' is not defined")
+            raise NameError(f"Deploy destination '{instruction.volume}' is not defined")
 
         if not destination.is_available:
-            raise FileNotFoundError(f"Deploy destination '{destination.name}' \
+            raise FileNotFoundError(f"Deploy destination '{instruction.volume}' \
                                     unavailable on this system")
 
         self.image = image
@@ -41,12 +51,30 @@ class DeployOperation(Operation):
         self.target_part = destination.target
 
     def execute(self):
+        status.update(f"Deploying {self.image.name} to {self.target_part.path}...")
         if not self.image.best_path:
             raise FileNotFoundError("Image is unavailable")
+        logger.info(f"Using {self.image.best_path}")
+        def _logger(typ: str):
+            def choose_output(out):
+                parsed_out = parse_output_string(format_ocs(out))
+                if parsed_out:
+                    if parsed_out[2] == 100:
+                        status.update("Cleaning up")
+                        return None
+                    status.update(f"Remaining: {parsed_out[1]}, Rate: {parsed_out[3]} GB/Min, Progress: {parsed_out[2]}%")
+                else:
+                    logger.info(out)
+            def hook(*args, **kw):
+                try:
+                    {"err": choose_output, 
+                    "out": logger.info, 
+                    "in": lambda x : x}[typ](*args, **kw)
+                except:
+                    pass
+            return hook
+        deploy_image(self.image, self.target_part, self.source_volume, io=_logger)
 
-        print(f"Deploying {self.image.name} to {self.target_part.path}...")
-        print(f"Using {self.image.best_path}")
-        deploy_image(self.image, self.target_part, self.source_volume)
 
 class PullOperation(Operation):
     """OperationClass for pulling a repository to device"""
@@ -60,14 +88,21 @@ class PullOperation(Operation):
         self.image_name = image.name
 
     def execute(self):
-        print(f"Pulling {self.image_name}...")
+        status.update(f"Pulling {self.image_name}...")
         # Get image blacklist
         blacklist = []
         for _op in self.executor.executed_operations:
             if isinstance(_op, PullOperation):
                 blacklist.append(_op.image_name)
 
-        self.executor.image_repo.pull(self.image_name, disallowed_deletions=blacklist)
+        task = progress.add_task(f"Pulling {self.image_name}...")
+
+        try:
+            self.executor.image_repo.pull(self.image_name, disallowed_deletions=blacklist, 
+            progress_callback=lambda copied, copied_total, total: progress.update(task, completed=copied_total, total=total))
+        except IOError:
+            logger.warning("Cannot pull image, Insufficient space!")
+        progress.remove_task(task)
 
 class CopyOperation(Operation):
     """Operation Class for copying a file to device"""
@@ -79,10 +114,10 @@ class CopyOperation(Operation):
             raise FileNotFoundError(f"Image '{instruction.image}' unavailable")
 
         if not destination:
-            raise NameError(f"Deploy destination '{destination.name}' is not defined")
+            raise NameError(f"Deploy destination '{instruction.volume}' is not defined")
 
         if not destination.is_available:
-            raise FileNotFoundError(f"Copy destination '{destination.name}' \
+            raise FileNotFoundError(f"Copy destination '{instruction.volume}' \
                                     unavailable on this system")
 
         self.image = image
@@ -94,7 +129,7 @@ class CopyOperation(Operation):
             raise FileNotFoundError("Image is unavailable")
 
         mount_path = tempfile.mkdtemp()
-        print(f"Mounting {self.target_part.path} at {mount_path}")
+        logger.info(f"Mounting {self.target_part.path} at {mount_path}")
         mount(self.target_part.path, mount_path)
 
         try:
@@ -104,14 +139,23 @@ class CopyOperation(Operation):
             if not path.isdir(destination_dir):
                 raise FileNotFoundError(f"Path '/{path.dirname(volume_path)}' \
                                         does not exist in the target volume.")
+            status.update(f"Copying {self.image.name} to {destination_path}...")
+            logger.info(f"Using {self.image.best_path}")
 
-            print(f"Copying {self.image.name} to {destination_path}...")
-            print(f"Using {self.image.best_path}")
-            shutil.copy(self.image.best_path, destination_path)
+            task = progress.add_task(f"Copying {self.image.name} to {destination_path}...")
+
+            copy_with_callback(
+                self.image.best_path, 
+                destination_path, 
+                callback=lambda copied, copied_total, total: progress.update(task, completed=copied_total, total=total),
+                follow_symlinks=False,
+                buffer_size=COPY_BLOCK_SIZE)
+
+            progress.remove_task(task)
         finally:
             umount(mount_path)
             os.rmdir(mount_path)
-            print("Unmounted working volume")
+            logger.info("Unmounted working volume")
 
 class UnpackOperation(Operation):
     """Operation Class for Unzipping archives to device"""
@@ -132,10 +176,10 @@ class UnpackOperation(Operation):
                                       Supported formats: '{', '.join(supported_exts)}'")
 
         if not destination:
-            raise NameError(f"Deploy destination '{destination.name}' is not defined")
+            raise NameError(f"Deploy destination '{instruction.volume}' is not defined")
 
         if not destination.is_available:
-            raise FileNotFoundError(f"Copy destination '{destination.name}' \
+            raise FileNotFoundError(f"Copy destination '{instruction.volume}' \
                                     unavailable on this system")
 
         self.image = image
@@ -147,7 +191,7 @@ class UnpackOperation(Operation):
             raise FileNotFoundError("Image is unavailable")
 
         mount_path = tempfile.mkdtemp()
-        print(f"Mounting {self.target_part.path} at {mount_path}")
+        logger.info(f"Mounting {self.target_part.path} at {mount_path}")
         mount(self.target_part.path, mount_path)
 
         try:
@@ -158,13 +202,13 @@ class UnpackOperation(Operation):
                 raise FileNotFoundError(f"Path '/{path.dirname(volume_path)}' \
                                         does not exist in the target volume.")
 
-            print(f"Unpacking {self.image.name} to {destination_path}...")
-            print(f"Using {self.image.best_path}")
+            status.update(f"Unpacking {self.image.name} to {destination_path}...")
+            logger.info(f"Using {self.image.best_path}")
             shutil.unpack_archive(self.image.best_path, destination_path)
         finally:
             umount(mount_path)
             os.rmdir(mount_path)
-            print("Unmounted working volume")
+            logger.info("Unmounted working volume")
 
 class FormatOperation(Operation):
     """Operation Class for Formatting a partition on device"""
@@ -178,18 +222,59 @@ class FormatOperation(Operation):
                              supported filesystems: '{', '.join(supported_filesystems)}")
 
         if not destination:
-            raise NameError(f"Format target '{destination.name}' is not defined")
+            raise NameError(f"Format target '{instruction.volume}' is not defined")
 
         if not destination.is_available:
-            raise FileNotFoundError(f"Copy destination '{destination.name}' \
+            raise FileNotFoundError(f"Copy destination '{instruction.volume}' \
                                     is unavailable on this system")
 
         self.fstype = fstype
         self.target_part = destination.target
 
     def execute(self):
-        print(f"Formatting {self.target_part.path} to {self.fstype}...")
+        status.update(f"Formatting {self.target_part.path} to {self.fstype}...")
         format_partition(self.target_part, self.fstype, verbose=True)
+
+class MkdirOperation(Operation):
+    """Operation Class for creating directories on volumes"""
+    def __init__(self, executor: RPFileExecutor, instruction: MkdirInstruction):
+        destination = executor.volume_man.get(instruction.volume)
+
+        if not destination:
+            raise NameError(f"Deploy destination '{instruction.volume}' is not defined")
+
+        if not destination.is_available:
+            raise FileNotFoundError(f"Copy destination '{instruction.volume}' \
+                                    unavailable on this system")
+
+        self.target_part = destination.target
+        self.destination_path = instruction.path
+
+    def execute(self):
+        if not self.image.best_path:
+            raise FileNotFoundError("Image is unavailable")
+
+        mount_path = tempfile.mkdtemp()
+        logger.info(f"Mounting {self.target_part.path} at {mount_path}")
+        mount(self.target_part.path, mount_path)
+
+        try:
+            volume_path = self.destination_path.lstrip('/')
+            destination_path = path.join(mount_path, volume_path)
+
+            status.update(f"Creating directory {self.destination_path}...")
+            os.makedirs(destination_path, parents=True, exist_ok=True)
+        finally:
+            umount(mount_path)
+            os.rmdir(mount_path)
+            logger.info("Unmounted working volume")
+
+class ShellOperation(Operation):
+    def __init__(self, executor: RPFileExecutor, instruction: ShellInstruction):
+        self.command = instruction.command
+
+    def execute(self):
+        bash("-c", self.command, _fg=True)
 
 class RPFileExecutor:
     """RPFile execution class"""
@@ -205,7 +290,7 @@ class RPFileExecutor:
         operations = []
         instructions = self.rpfile.instructions
 
-        print("Starting build")
+        logger.info("Starting build")
         for i, instruction in enumerate(instructions):
             print(f"[{i+1}/{len(instructions)}] {instruction}")
             try:
@@ -220,21 +305,22 @@ class RPFileExecutor:
                     operation = UnpackOperation(self, instruction)
                 elif isinstance(instruction, FormatInstruction):
                     operation = FormatOperation(self, instruction)
+                elif isinstance(instruction, MkdirInstruction):
+                    operation = MkdirOperation(self, instruction)
+                elif isinstance(instruction, ShellInstruction):
+                    operation = ShellOperation(self, instruction)
                 else:
                     if skip_unsupported:
-                        print(f"Skipping unsupported instruction type: {type(instruction)}")
+                        logger.warning(f"Skipping unsupported instruction type: {type(instruction)}")
                         continue
                     else:
                         raise (f"Unsupported instruction type: {type(instruction)}")
             except Exception as ex:
-                print("Build failed!")
-                print(f"ERROR: {ex}")
-                return False
+                raise RuntimeError("Build failed!") from ex
 
             operations.append(operation)
 
         self.operations = operations
-        return True
 
     def execute(self):
         """Executes RPFile"""
@@ -245,17 +331,15 @@ class RPFileExecutor:
             raise RuntimeError("Executor was not compiled! \
                                Use .compile() to build an operation list.")
 
+        task = progress.add_task("Warming up....", total=len(self.operations))
         for i, _op in enumerate(self.operations):
-            print(f"Executing operation {i+1} of {len(self.operations)}: {type(_op).__name__}")
+            progress.update(task, completed=len(self.executed_operations), total=len(self.operations), description=f"Executing operation {i+1} of {len(self.operations)}: {type(_op).__name__}")
             try:
                 _op.execute()
             except Exception as ex:
-                print("Execution failed!")
-                print(f"ERROR: {ex}")
-                return False
+                raise RuntimeError("Execution failed!") from ex
 
             self.executed_operations.append(_op)
 
         print("Done executing RPFile")
         self.executed_operations.clear()
-        return True

@@ -30,8 +30,11 @@ def parse_arguments(_s):
         args.pop(args.index("TO"))
     return args
 
-def compile_instruction(instrucion_type, params):
+def compile_instruction(instrucion_type, value):
     """Chooses Class for given instruction"""
+    instrucion_type = instrucion_type.upper()
+    params = parse_arguments(value)
+
     if instrucion_type == "DEPLOY":
         return DeployInstruction(params)
     elif instrucion_type == "COPY":
@@ -42,6 +45,10 @@ def compile_instruction(instrucion_type, params):
         return PullInstruction(params)
     elif instrucion_type ==  "FORMAT":
         return FormatInstruction(params)
+    elif instrucion_type == "MKDIR":
+        return MkdirInstruction(params)
+    elif instrucion_type == "RUN":
+        return ShellInstruction([value])
     else:
         # Unknown instruction
         return Instruction(instrucion_type, params)
@@ -55,6 +62,50 @@ class Instruction:
     def __str__(self):
         return f'{self.type} {" ".join([F"`{x}`" for x in self.params])}'
 
+class ShellInstruction(Instruction):
+    """An instruction wrapper for running arbitrary shell commands"""
+    def __init__(self, params):
+        if len(params) == 0:
+            raise ValueError(f"Invalid shell instruction signature: \
+                             0 params, expected 1 or more")
+
+        super(ShellInstruction, self).__init__("RUN", params)
+        command = params[0].strip()
+
+        if command == "":
+            raise ValueError(f"Invalid empty command")
+
+        self.command = command
+
+class MkdirInstruction(Instruction):
+    """An instruction wrapper for creating directories"""
+    def __init__(self, params):
+        if len(params) != 1:
+            raise ValueError(f"Invalid mkdir instruction signature: \
+                             {len(params)} params, expected 1")
+
+        target = params[0].strip().split(":")
+
+        if len(target) == 2:
+            target_path = target[1].strip()
+            if target_path == "":
+                target_path = "/"
+        elif len(target) == 1:
+            target_path = "/"
+        else:
+            raise ValueError(f"Invalid dir path definition: \"{params[1]}\"")
+
+        target_volume = target[0].strip()
+
+        if target_volume == "":
+            raise ValueError("Invalid target volume definition")
+
+        super(MkdirInstruction, self).__init__("MKDIR", params)
+        self.volume = target_volume
+        self.path = target_path
+
+    def __str__(self):
+        return f"MKDIR {self.volume}:{self.path}"
 
 class DeployInstruction(Instruction):
     """A instruction wrapper for Deploying a image"""
@@ -220,8 +271,7 @@ class RPFile:
             self.instructions = []
             for step in parser.structure:
                 instrucion_type = step["instruction"].upper()
-                params = parse_arguments(step["value"])
-                instructions.append(compile_instruction(instrucion_type, params))
+                instructions.append(compile_instruction(instrucion_type, step["value"]))
 
         self.instructions = instructions
 

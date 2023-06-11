@@ -3,24 +3,30 @@ from libs.repositories import ImageRepository, ConfigRepository
 from libs.volumes import VolumeManager
 from libs.partitioning import Disk
 from libs.execution import RPFileExecutor
+from libs.picker import AnsiPicker
+from libs.pretty import setup
+from libs.constants import DEFAULT_REMOTE_MOUNTPOINT, DEFAULT_CACHE_MOUNTPOINT, DEFAULT_CACHE_LABEL, DEFAULT_PORT
 
 cmdline = KernelCmdlineParser()
 
-REMOTE_MOUNTPOINT=cmdline.get("remote_mountpoint") or "/mnt/repo"
-# CONFIGS_MOUNTPOINT=cmdline.get("configs_mountpoint") or "/mnt/configs"
-CACHE_MOUNTPOINT=cmdline.get("cache_mountpoint") or "/mnt/cache"
-CACHE_LABEL=cmdline.get("cache_label") or "FAILRP_CACHE"
+wrapper, print, console, status, _logger, progress = setup()
+
+REMOTE_MOUNTPOINT=cmdline.get("remote_mountpoint") or DEFAULT_REMOTE_MOUNTPOINT
+CACHE_MOUNTPOINT=cmdline.get("cache_mountpoint") or DEFAULT_CACHE_MOUNTPOINT
+CACHE_LABEL=cmdline.get("cache_label") or DEFAULT_CACHE_LABEL
 HOST=cmdline.get("host")
-PORT=int(cmdline.get("port") or 2021)
+PORT=int(cmdline.get("port") or DEFAULT_PORT)
 
 VOLUMEFILE = """
 volumes:
-  bootloader:
+  recovery:
     index: 1
-  windows_reserved:
+  bootloader:
     index: 2
-  system:
+  reserved:
     index: 3
+  system:
+    index: 4
 """
 
 for disk in Disk.get_all().values():
@@ -30,23 +36,17 @@ for disk in Disk.get_all().values():
             repo_part = part
             break
 
-print(f"Using root disk {root_disk.path}")
-print(f"Local repo at {repo_part.path}")
+_logger.info(f"Using root disk {root_disk.path}")
+_logger.info(f"Local repo at {repo_part.path}")
 
 image_repo = ImageRepository(REMOTE_MOUNTPOINT, CACHE_MOUNTPOINT, True)
 volume_man = VolumeManager(root_disk, repo_part, VOLUMEFILE)
-config_repo = ConfigRepository(HOST, PORT, True) 
+config_repo = ConfigRepository(HOST, PORT, True)
 
-while True:
-    config_name = input("Select config: ")
-    selected_config = config_repo.get(config_name)
+picker = AnsiPicker(config_repo.configs)
+selected_config = picker.ask(15)
 
-    if selected_config:
-        break
-
-    print("Invalid config name")
-    print(f"Available config files: {', '.join(config_repo.configs.keys())}")
-
-executor = RPFileExecutor(selected_config, image_repo, volume_man)
-executor.compile()
-executor.execute()
+with wrapper:
+  executor = RPFileExecutor(selected_config, image_repo, volume_man)
+  executor.compile()
+  executor.execute()

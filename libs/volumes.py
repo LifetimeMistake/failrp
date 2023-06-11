@@ -55,8 +55,8 @@ class VolumeManager:
             target_path = f"{self.root.path}{volume.index}"
             target_part = None
             for part in self.root.partitions:
-                if part.path == target_path:
-                    if self.local_repo is not None and self.local_repo.path == target_path:
+                if part.path.startswith(self.root.path) and part.path.endswith(str(volume.index)):
+                    if self.local_repo is not None and self.local_repo.path.startswith(self.root.path) and self.local_repo.path.endswith(str(volume.index)):
                         raise ValueError(f"Volume {name} targets the local image repository. \
                                         Executing operations on this partition is not allowed.")
 

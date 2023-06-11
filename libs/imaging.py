@@ -1,6 +1,7 @@
 """OCS Wrapper Methods"""
 import os
 import os.path as path
+import sys
 import tempfile
 from sh import mount, umount, Command
 from .partitioning import Partition
@@ -27,7 +28,9 @@ def unmount_image(mount_path: str):
 
     os.rmdir(mount_path)
 
-def deploy_image(image: Image, target_partition: Partition, source_part=None):
+
+
+def deploy_image(image: Image, target_partition: Partition, source_part=None, io=None):
     """deploys image to partition"""
     # Make sure partition is not busy
     if target_partition.mountpoint:
@@ -65,8 +68,13 @@ def deploy_image(image: Image, target_partition: Partition, source_part=None):
         source_dir = path.basename(mount_path)
         root_dir = path.dirname(mount_path)
         target_device = path.basename(target_partition.path)
-
-        ocs_sr("-e1", "auto", "-e2", "-t", "-r", "-k", "-scr", "-nogui",
-         "-or", root_dir, "-f", source_part, "restoreparts", source_dir, target_device, _fg=True)
+        if io:
+            ocs_sr("-e1", "auto", "-e2", "-t", "-r", "-k", "-batch", "-scr", "-nogui",
+            "-or", root_dir, "-f", source_part, "restoreparts", source_dir, target_device, _in=io("in"), _out=io("out"), _err=io("err"))
+        else:
+            # pass
+            ocs_sr("-e1", "auto", "-e2", "-t", "-r", "-k", "-batch", "-scr", "-nogui",
+                "-or", root_dir, "-f", source_part, "restoreparts", source_dir, target_device, _fg=True)
+            
     finally:
         unmount_image(mount_path)

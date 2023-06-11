@@ -1,0 +1,15 @@
+PULL newest.iso
+PULL "chr-6.48.6.vdi"
+PULL "ubuntu desktop.vdi"
+PULL "win10.vdi"
+PULL "Windows serwer 2022 Standard PL.vdi"
+
+DEPLOY newest.iso:nvme0n1p1 recovery
+DEPLOY newest.iso:nvme0n1p2 bootloader
+DEPLOY newest.iso:nvme0n1p3 reserved
+DEPLOY newest.iso:nvme0n1p4 system
+
+COPY "chr-6.48.6.vdi" system:/Users/user/Desktop/
+COPY "ubuntu desktop.vdi" system:/Users/user/Desktop/
+COPY "win10.vdi" system:/Users/user/Desktop/
+COPY "Windows serwer 2022 Standard PL.vdi" system:/Users/user/Desktop/ 

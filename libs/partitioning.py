@@ -4,12 +4,11 @@ import os.path as path
 import typing
 import json
 import re
-from sh import e2label, lsblk, mount, umount, mkdir
+from .constants import LSBLK_DEFAULT_COLUMNS
+from sh import e2label, lsblk, mount, umount, mkdir, udevadm
 
 lsblk_unk_column = re.compile(r"lsblk: unknown column: (?P<column>.*)")
 lsblk_unk_device = re.compile(r"lsblk: (?P<device>.*): not a block device")
-COLUMNS = ["size", "rm", "partuuid", "uuid", "fstype", "partlabel", "label", "mountpoint"]
-
 
 class LsblkHelper:
     """lsblk Helper class"""
@@ -61,10 +60,22 @@ class Disk:
         self.partitions: list[Partition] = partitions
 
     @staticmethod
+    def from_partition(_part: Partition) -> Disk:
+        """returns the disk owning the given partition"""
+        disks = Disk.get_all().values()
+
+        for disk in disks:
+            for part in disk.partitions:
+                if _part.path != part.path:
+                    return disk
+
+        raise FileNotFoundError("Could not find any disk with the given partition")
+
+    @staticmethod
     def from_device(_path) -> Disk:
         """creates disk object from drive path"""
         disk = None
-        devices = LsblkHelper.call(COLUMNS, _path)
+        devices = LsblkHelper.call(LSBLK_DEFAULT_COLUMNS, _path)
         parts = []
 
         # Find disk
@@ -110,7 +121,7 @@ class Disk:
     def get_all() -> dict[str, Disk]:
         """returns all Drives"""
         disks = {}
-        devices = LsblkHelper.call(COLUMNS)
+        devices = LsblkHelper.call(LSBLK_DEFAULT_COLUMNS)
         for disk in devices:
             if disk["type"] != "disk":
                 continue
@@ -146,7 +157,7 @@ class Partition:
     @classmethod
     def from_device(cls, _path: str) -> Partition:
         """create partition from systems partition path"""
-        devices = LsblkHelper.call(COLUMNS, _path)
+        devices = LsblkHelper.call(LSBLK_DEFAULT_COLUMNS, _path)
         for device in devices:
             if device["path"] != _path:
                 continue
@@ -177,7 +188,7 @@ class Partition:
     def get_all() -> dict[str, Partition]:
         """returns all available partitions"""
         partitions = {}
-        devices = LsblkHelper.call(COLUMNS)
+        devices = LsblkHelper.call(LSBLK_DEFAULT_COLUMNS)
         for device in devices:
             if device["type"] != "part":
                 continue
@@ -192,6 +203,7 @@ class Partition:
             label = ""
 
         e2label(self.path, label)
+        udevadm("trigger")
 
     def mount(self, mountpoint: str, create_mountpoint=True):
         """mount partition to system"""
