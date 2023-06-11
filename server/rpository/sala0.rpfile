@@ -1,0 +1,5 @@
+PULL super.iso
+DEPLOY super.iso:sda1 bootloader
+DEPLOY super.iso:sda2 reserved
+DEPLOY super.iso:sda3 system
+DEPLOY super.iso:sda4 recovery
