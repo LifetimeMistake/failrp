@@ -17,20 +17,7 @@ CACHE_MOUNTPOINT=cmdline.get("cache_mountpoint") or DEFAULT_CACHE_MOUNTPOINT
 CACHE_LABEL=cmdline.get("cache_label") or DEFAULT_CACHE_LABEL
 HOST=cmdline.get("host")
 PORT=int(cmdline.get("port") or DEFAULT_PORT)
-
-req = requests.get(f"{HOST}:{PORT}/labels/", timeout=10)
-labels = {}
-_configurations = req.json()
-for name in _configurations:
-    try:
-        config_body = requests.get(f"{HOST}:{PORT}/labels/{name}", timeout=20).text
-        labels[name] = config_body
-    except Exception as ex:
-        logging.warning(f"WARNING: Failed to download config {name}: {ex}")
-
-picker = AnsiPicker(labels)
-
-VOLUMEFILE = picker.ask(15)
+VOLUMEFILE = requests.get(f"http://{HOST}:{PORT}/labels", timeout=10)
 
 for disk in Disk.get_all().values():
     for part in disk.partitions:

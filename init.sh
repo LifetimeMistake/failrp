@@ -1,7 +1,6 @@
 #!/usr/bin/bash
+bash
 clear
-echo "dzien dobry"
-echo "witam w najlepszym programie do odtwarzania komputerow"
 cd /app
  
 echo "Bootstrapping..."

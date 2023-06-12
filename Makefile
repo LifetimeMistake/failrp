@@ -9,6 +9,7 @@ unpack:
 	unsquashfs -d "$(FS_ROOT)" "$(INPUT_FS)"
 
 setup:
+	apt update && apt install -y wine wine64
 	# Copy files
 	mkdir "$(FS_ROOT)/app"
 	cp -r libs "$(FS_ROOT)/app/libs"

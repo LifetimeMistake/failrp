@@ -1,5 +1,8 @@
-PULL super.iso
-DEPLOY super.iso:sda1 bootloader
-DEPLOY super.iso:sda2 reserved
-DEPLOY super.iso:sda3 system
-DEPLOY super.iso:sda4 recovery
+PULL win10base.iso
+FORMAT bootloader vfat
+FORMAT reserved ntfs
+FORMAT system ntfs
+DEPLOY win10base.iso:sda1 bootloader
+DEPLOY win10base.iso:sda2 reserved
+DEPLOY win10base.iso:sda3 system
+#DEPLOY win10base.iso:vda4 recovery
